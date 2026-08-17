@@ -24,6 +24,9 @@ test("GitHub Pages 产物包含可发布的核心资源", async () => {
 
   assert.ok(assetPaths.length > 0, "首页应引用至少一个 _next 资源");
   await access(new URL(".nojekyll", outputDirectory));
+  await access(new URL("models/mobilenet-v2-050/model.json", outputDirectory));
+  await access(new URL("models/mobilenet-v2-050/group1-shard1of2.bin", outputDirectory));
+  await access(new URL("models/mobilenet-v2-050/group1-shard2of2.bin", outputDirectory));
 
   for (const assetPath of new Set(assetPaths)) {
     await access(path.join(outputDirectoryPath, assetPath));

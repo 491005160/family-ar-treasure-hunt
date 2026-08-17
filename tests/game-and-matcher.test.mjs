@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createInitialGameState, gameReducer, getCurrentTargetId } from "../app/core/game.js";
 import { buildZoomPresets, readTorchInfo, readZoomInfo } from "../app/core/camera.js";
+import { calculateCoverCrop } from "../app/core/capture.js";
+import { cosineSimilarity } from "../app/core/embedding.js";
 import {
-  compareImageDescriptors,
+  createEmbeddingMatcher,
   createMockMatcher,
-  createReferenceMatcher,
   makeDebugMatch,
   normalizeMatchResult,
 } from "../app/core/matcher.js";
@@ -58,42 +59,65 @@ test("mock matcher 固定一次失败、一次成功", async () => {
   assert.equal(match.targetId, targetIds[0]);
 });
 
-test("普通 matcher 只有达到 88% 才通过当前目标", async () => {
-  const referenceDescriptor = {
-    histogram: Array(24).fill(1 / 8),
-    colorGrid: Array(192).fill(0.5),
-    structureGrid: Array(64).fill(0),
-  };
-  const wrongDescriptor = {
-    histogram: Array(24).fill(0),
-    colorGrid: Array(192).fill(0),
-    structureGrid: Array(64).fill(3),
-  };
-  let captureDescriptor = wrongDescriptor;
-  const matcher = createReferenceMatcher({
-    describeCapture: async () => captureDescriptor,
-    describeReference: async () => referenceDescriptor,
+test("embedding matcher 同时要求 Top1 强度和 Top1-Top2 差距", async () => {
+  let captureEmbedding = [1, 0];
+  const referenceEmbeddings = new Map([
+    [TARGETS[0].referenceImages[0], [0.8, 0.6]],
+    [TARGETS[1].referenceImages[0], [0.65, Math.sqrt(1 - 0.65 ** 2)]],
+    [TARGETS[2].referenceImages[0], [0.3, Math.sqrt(1 - 0.3 ** 2)]],
+    [TARGETS[3].referenceImages[0], [0.1, Math.sqrt(1 - 0.1 ** 2)]],
+  ]);
+  const matcher = createEmbeddingMatcher({
+    embedder: {
+      embedBlob: async () => captureEmbedding,
+      embedUrl: async (url) => referenceEmbeddings.get(url),
+    },
+    rules: { minimumSimilarity: 0.62, minimumMargin: 0.1 },
   });
   const context = { targets: TARGETS, foundIds: [] };
+  const clearMatch = await matcher.match({ blob: {} }, context);
+  assert.equal(clearMatch.matched, true);
+  assert.equal(clearMatch.targetId, targetIds[0]);
+  assert.equal(Number(clearMatch.margin.toFixed(2)), 0.15);
 
-  const miss = await matcher.match({ blob: {} }, context);
-  assert.equal(miss.matched, false);
-  assert.ok(miss.confidence < 0.88);
+  referenceEmbeddings.set(TARGETS[1].referenceImages[0], [0.74, Math.sqrt(1 - 0.74 ** 2)]);
+  const ambiguous = await matcher.match({ blob: {} }, context);
+  assert.equal(ambiguous.matched, false);
+  assert.equal(ambiguous.reason, "top1-top2-margin-too-small");
 
-  captureDescriptor = referenceDescriptor;
-  const match = await matcher.match({ blob: {} }, context);
-  assert.equal(match.matched, true);
-  assert.equal(match.targetId, targetIds[0]);
-  assert.equal(match.confidence, 1);
+  captureEmbedding = [-1, 0];
+  const weak = await matcher.match({ blob: {} }, context);
+  assert.equal(weak.matched, false);
+  assert.equal(weak.reason, "top1-below-minimum");
 });
 
-test("图片描述完全相同时相似度为 100%", () => {
-  const descriptor = {
-    histogram: Array(24).fill(0),
-    colorGrid: Array(192).fill(0.4),
-    structureGrid: Array(64).fill(0.2),
-  };
-  assert.equal(compareImageDescriptors(descriptor, descriptor), 1);
+test("embedding 余弦相似度完全相同时为 1", () => {
+  assert.equal(cosineSimilarity([0.6, 0.8], [0.6, 0.8]), 1);
+});
+
+test("已找到目标从 embedding 候选集中排除", async () => {
+  const matcher = createEmbeddingMatcher({
+    embedder: {
+      embedBlob: async () => [1, 0],
+      embedUrl: async (url) => url === TARGETS[0].referenceImages[0] ? [1, 0] : [0.8, 0.6],
+    },
+    rules: { minimumSimilarity: 0.62, minimumMargin: 0.1 },
+  });
+  const result = await matcher.match({ blob: {} }, { targets: TARGETS, foundIds: [targetIds[0]] });
+  assert.equal(result.scores.find((score) => score.targetId === targetIds[0]).excluded, true);
+  assert.notEqual(result.top1.targetId, targetIds[0]);
+});
+
+test("截图区域按 object-fit cover 映射到相机源画面", () => {
+  const crop = calculateCoverCrop(
+    { width: 1920, height: 1080 },
+    { left: 0, top: 0, width: 390, height: 844 },
+    { left: 86, top: 306, width: 218, height: 218 },
+  );
+  assert.equal(Math.round(crop.width), 279);
+  assert.equal(Math.round(crop.height), 279);
+  assert.ok(crop.x > 700 && crop.x < 900);
+  assert.ok(crop.y > 350 && crop.y < 450);
 });
 
 test("摄像头焦段只显示设备实际支持的倍率", () => {

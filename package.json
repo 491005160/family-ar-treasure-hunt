@@ -11,10 +11,13 @@
     "prepare:pages": "node scripts/prepare-pages.mjs",
     "start": "vinext start",
     "test": "node --test tests/game-and-matcher.test.mjs",
+    "test:embedding": "node scripts/calibrate-embedding.mjs",
     "test:static": "node --test tests/static-export.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },

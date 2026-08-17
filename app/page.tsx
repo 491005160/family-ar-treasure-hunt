@@ -5,7 +5,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
 import { TARGETS, getTarget } from "./core/targets.js";
-import { createMockMatcher, createReferenceMatcher, makeDebugMatch } from "./core/matcher.js";
+import { createEmbeddingMatcher, createMockMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
   createInitialGameState,
@@ -19,6 +19,18 @@ import { FAILURE_ASSIST_THRESHOLD, failureHelp, feedbackForMatch, formatConfiden
 type Feedback = { tone: string; title: string; detail: string };
 type ZoomInfo = { min: number; max: number; step: number; value: number; presets: number[] };
 type TorchInfo = { supported: boolean; enabled: boolean };
+type SimilarityScore = { targetId: string; similarity: number | null; excluded?: boolean; referenceCount?: number };
+type MatchResult = {
+  matched: boolean;
+  targetId: string | null;
+  confidence: number;
+  provider: string;
+  reason?: string | null;
+  scores?: SimilarityScore[];
+  top1?: { targetId: string; similarity: number } | null;
+  top2?: { targetId: string; similarity: number } | null;
+  margin?: number | null;
+};
 
 const TARGET_IDS = TARGETS.map((target) => target.id);
 
@@ -38,10 +50,12 @@ export default function Home() {
   );
   const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
   const [lastCapture, setLastCapture] = useState<string | null>(null);
+  const [lastRecognition, setLastRecognition] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const focusFrameRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
   const matcher = useMemo(
-    () => debugEnabled ? createMockMatcher() : createReferenceMatcher(),
+    () => debugEnabled ? createMockMatcher() : createEmbeddingMatcher(),
     [debugEnabled],
   );
 
@@ -72,6 +86,7 @@ export default function Home() {
       setZoomInfo(info?.zoom ?? null);
       setTorchInfo(info?.torch ?? null);
       dispatch({ type: "START" });
+      void matcher.prepare?.(TARGETS).catch(() => undefined);
     } catch (error) {
       setCameraActive(false);
       setCameraError(cameraErrorMessage(error));
@@ -88,7 +103,7 @@ export default function Home() {
     dispatch({ type: "START" });
   };
 
-  const submitResult = (result: ReturnType<typeof makeDebugMatch>) => {
+  const submitResult = (result: MatchResult) => {
     const accepted = result.matched && TARGET_IDS.includes(result.targetId) && !game.foundIds.includes(result.targetId);
     const target = accepted ? getTarget(result.targetId) : null;
     dispatch({ type: "MATCH_RESULT", result, targetIds: TARGET_IDS });
@@ -99,8 +114,9 @@ export default function Home() {
     if (isMatching) return;
     setIsMatching(true);
     try {
-      const capture = await captureFrame(videoRef.current);
-      setLastCapture(capture.dataUrl);
+      const capture = await captureFrame(videoRef.current, { frameElement: focusFrameRef.current });
+      setLastCapture(capture.fullDataUrl);
+      setLastRecognition(capture.recognitionDataUrl);
       const result = await matcher.match(capture, { targets: TARGETS, foundIds: game.foundIds });
       submitResult(result);
     } catch (error) {
@@ -146,6 +162,7 @@ export default function Home() {
     clearStoredGame();
     setFeedback(null);
     setLastCapture(null);
+    setLastRecognition(null);
     setPreviewTargetId(null);
     setDebugOpen(false);
     dispatch({ type: "RESET", keepPlaying });
@@ -257,7 +274,7 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="focus-frame" aria-hidden="true"><i /><i /><i /><i /></div>
+          <div className="focus-frame" ref={focusFrameRef} aria-hidden="true"><i /><i /><i /><i /></div>
 
           <div className="hunt-footer">
             {(zoomInfo?.presets.length ?? 0) > 1 || torchInfo?.supported ? (
@@ -292,7 +309,7 @@ export default function Home() {
                 {debugEnabled && <button type="button" onClick={() => setDebugOpen(true)}>打开调试模式</button>}
               </div>
             )}
-            <p className="capture-hint">{isMatching ? "正在辨认宝藏…" : "把目标放进取景框"}</p>
+            <p className="capture-hint">{isMatching ? "正在提取宝藏特征…" : "将你认为的宝藏放入框内"}</p>
             <button className={`capture-button ${isMatching ? "is-busy" : ""}`} type="button" aria-label="拍摄并识别" onClick={takePhoto} disabled={isMatching}><span /></button>
             {debugEnabled && (
               <button className="debug-trigger" type="button" onClick={() => setDebugOpen(true)} aria-label="打开调试模式">
@@ -341,10 +358,28 @@ export default function Home() {
                 </div>
                 <div className="match-inspector">
                   <div><span>最近结果</span><strong>{game.lastMatch ? (game.lastMatch.accepted ? "MATCH" : "MISS") : "—"}</strong></div>
-                  <div><span>confidence</span><strong>{formatConfidence(game.lastMatch?.confidence)}</strong></div>
+                  <div><span>Top1</span><strong>{formatMatchRank(game.lastMatch?.top1)}</strong></div>
+                  <div><span>Top2</span><strong>{formatMatchRank(game.lastMatch?.top2)}</strong></div>
+                  <div><span>margin</span><strong>{formatConfidence(game.lastMatch?.margin)}</strong></div>
                   <div><span>provider</span><strong>{game.lastMatch?.provider ?? "—"}</strong></div>
-                  {lastCapture && <img src={lastCapture} alt="最近一次拍摄缩略图" />}
+                  <div><span>reason</span><strong>{game.lastMatch?.reason ?? "—"}</strong></div>
                 </div>
+                {game.lastMatch?.scores?.length > 0 && (
+                  <div className="similarity-table" aria-label="四个目标相似度">
+                    {game.lastMatch.scores.map((score: SimilarityScore) => (
+                      <div key={score.targetId}>
+                        <span>{getTarget(score.targetId)?.shortName ?? score.targetId}</span>
+                        <strong>{score.excluded ? "已排除" : formatConfidence(score.similarity)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(lastCapture || lastRecognition) && (
+                  <div className="debug-captures">
+                    {lastRecognition && <figure><img src={lastRecognition} alt="中央框实际识别图片" /><figcaption>实际识别裁剪</figcaption></figure>}
+                    {lastCapture && <figure><img src={lastCapture} alt="最近一次完整截图" /><figcaption>完整截图（仅 Debug）</figcaption></figure>}
+                  </div>
+                )}
                 <button className="reset-button" type="button" onClick={() => resetGame(true)}>重置本局进度</button>
               </aside>
             </div>
@@ -357,4 +392,9 @@ export default function Home() {
 
 function formatZoom(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatMatchRank(rank?: { targetId: string; similarity: number } | null) {
+  if (!rank) return "—";
+  return `${getTarget(rank.targetId)?.shortName ?? rank.targetId} ${formatConfidence(rank.similarity)}`;
 }

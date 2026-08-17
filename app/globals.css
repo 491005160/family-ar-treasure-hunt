@@ -177,7 +177,7 @@ h1 {
 .treasure-slot.is-current .slot-visual { width: 38px; height: 38px; border: 1px solid rgba(255,255,255,.55); }
 .treasure-slot.is-found { border: 2px solid var(--slot-color); color: #fff; background: color-mix(in srgb, var(--slot-color) 28%, rgba(7,21,28,.82)); box-shadow: 0 0 22px color-mix(in srgb, var(--slot-color) 42%, transparent); }
 
-.focus-frame { position: absolute; z-index: 2; left: 50%; top: 49%; width: min(66vw, 270px); aspect-ratio: 1; transform: translate(-50%, -50%); opacity: .7; }
+.focus-frame { position: absolute; z-index: 2; left: 50%; top: 49%; width: min(56vw, 260px); aspect-ratio: 1; transform: translate(-50%, -50%); opacity: .82; }
 .focus-frame i { position: absolute; width: 34px; height: 34px; border-color: #fff; border-style: solid; }
 .focus-frame i:nth-child(1) { left: 0; top: 0; border-width: 2px 0 0 2px; border-radius: 12px 0 0; }
 .focus-frame i:nth-child(2) { right: 0; top: 0; border-width: 2px 2px 0 0; border-radius: 0 12px 0 0; }
@@ -236,11 +236,19 @@ h1 {
 .debug-targets button > span img { width: 100%; height: 100%; object-fit: cover; }
 .debug-targets b { align-self: end; font-size: 12px; }
 .debug-targets small { align-self: start; margin-top: 3px; color: #7a8584; font-size: 9px; }
-.match-inspector { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; margin: 17px 0 10px; border: 1px solid #cad2cc; border-radius: 12px; background: #cad2cc; }
+.match-inspector { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; overflow: hidden; margin: 17px 0 10px; border: 1px solid #cad2cc; border-radius: 12px; background: #cad2cc; }
 .match-inspector > div { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 9px; background: #eef1e9; }
 .match-inspector span { color: #78827d; font: 9px/1.2 Arial, sans-serif; }
-.match-inspector strong { margin-top: 6px; overflow: hidden; font: 700 12px/1 Arial, sans-serif; text-overflow: ellipsis; }
-.match-inspector img { position: absolute; right: 6px; top: 6px; width: 46px; height: 46px; border: 1px solid var(--ink); border-radius: 8px; object-fit: cover; opacity: .2; pointer-events: none; }
+.match-inspector strong { margin-top: 6px; overflow: hidden; font: 700 11px/1.25 Arial, sans-serif; text-overflow: ellipsis; }
+.similarity-table { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 10px 0; }
+.similarity-table > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border: 1px solid #cad2cc; border-radius: 10px; background: #fff; }
+.similarity-table span { overflow: hidden; color: #667478; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.similarity-table strong { font: 700 11px/1 Arial, sans-serif; }
+.debug-captures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 11px 0 14px; }
+.debug-captures figure { margin: 0; overflow: hidden; border: 1px solid #cad2cc; border-radius: 11px; background: #fff; }
+.debug-captures img { width: 100%; aspect-ratio: 1; display: block; object-fit: cover; }
+.debug-captures figure:last-child img { object-fit: contain; background: #dbe4df; }
+.debug-captures figcaption { padding: 7px 8px; color: #657276; font-size: 9px; }
 .reset-button { width: 100%; height: 43px; border: 1.5px solid var(--coral); border-radius: 12px; color: #c94b33; background: transparent; font-size: 12px; cursor: pointer; }
 
 .complete-shell { background: linear-gradient(160deg, #fff7d9, #dff0df); }
