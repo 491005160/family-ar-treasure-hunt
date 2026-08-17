@@ -16,8 +16,8 @@ test("GitHub Pages 产物包含可发布的核心资源", async () => {
   const outputDirectory = new URL("../dist/client/", import.meta.url);
   const outputDirectoryPath = fileURLToPath(outputDirectory);
   const html = await readFile(new URL("index.html", outputDirectory), "utf8");
-  const assetPaths = [...html.matchAll(/["']\/[^"']+\/_next\/[^"']+["']/g)]
-    .map(([match]) => match.slice(1, -1))
+  const assetPaths = [...html.matchAll(/(?:href|src)="([^"]+\/_next\/[^"]+)"/g)]
+    .map(([, assetPath]) => assetPath)
     .map((assetPath) => assetPath.replace(/^\/[^/]+\//, ""));
 
   assert.ok(assetPaths.length > 0, "首页应引用至少一个 _next 资源");
