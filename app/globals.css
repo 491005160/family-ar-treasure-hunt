@@ -164,7 +164,7 @@ h1 {
 .progress-pill strong { color: var(--yellow); font-size: 18px; }
 .progress-pill span { margin-left: 2px; color: rgba(255,255,255,.7); font-size: 11px; }
 .mode-pill { height: 27px; display: grid; place-items: center; padding: 0 11px; border-radius: 999px; color: #cce8dd; font: 700 9px/1 Arial, sans-serif; letter-spacing: .08em; }
-.icon-button { position: absolute; right: 14px; width: 33px; height: 33px; border-radius: 50%; color: #fff; cursor: pointer; }
+.icon-button { position: absolute; right: 14px; min-width: 42px; height: 33px; padding: 0 8px; border-radius: 999px; color: #fff; font-size: 9px; cursor: pointer; }
 
 .treasure-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 13px; }
 .treasure-slot { position: relative; min-width: 0; height: 82px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,.22); border-radius: 16px; color: rgba(255,255,255,.38); background: rgba(7,21,28,.66); backdrop-filter: blur(10px); }
@@ -185,6 +185,14 @@ h1 {
 .focus-frame i:nth-child(4) { left: 0; bottom: 0; border-width: 0 0 2px 2px; border-radius: 0 0 0 12px; }
 
 .hunt-footer { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; min-height: 168px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0 20px max(23px, env(safe-area-inset-bottom)); }
+.camera-tools { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.zoom-controls { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 4px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; background: rgba(5,18,24,.64); backdrop-filter: blur(10px); }
+.zoom-controls button { min-width: 34px; height: 30px; padding: 0 8px; border: 0; border-radius: 999px; color: rgba(255,255,255,.72); background: transparent; font: 700 11px/1 Arial, sans-serif; cursor: pointer; }
+.zoom-controls button.is-active { color: #091a21; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.28); }
+.torch-control { height: 38px; padding: 0 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; color: rgba(255,255,255,.78); background: rgba(5,18,24,.64); font-size: 10px; cursor: pointer; backdrop-filter: blur(10px); }
+.torch-control span { margin-right: 3px; color: var(--yellow); }
+.torch-control.is-active { border-color: var(--yellow); color: #18242a; background: var(--yellow); }
+.torch-control.is-active span { color: #18242a; }
 .capture-hint { margin: 0 0 10px; color: rgba(255,255,255,.8); font-size: 11px; letter-spacing: .08em; }
 .capture-button { width: 76px; height: 76px; display: grid; place-items: center; padding: 0; border: 3px solid #fff; border-radius: 50%; background: rgba(4,15,20,.3); box-shadow: 0 4px 20px rgba(0,0,0,.35); cursor: pointer; }
 .capture-button span { width: 59px; height: 59px; display: block; border-radius: 50%; background: #fff; transition: transform 140ms ease, background 140ms ease; }

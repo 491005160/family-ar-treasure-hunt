@@ -5,7 +5,7 @@ export function feedbackForMatch(result, target) {
     return { tone: "success", title: "找到宝藏！", detail: `${target.name} · 相似度 ${formatConfidence(result.confidence)}` };
   }
   if (result?.provider === "local-reference") {
-    return { tone: "miss", title: "还不够像", detail: `相似度 ${formatConfidence(result.confidence)}，达到 88% 才算找到` };
+    return { tone: "miss", title: "还没找到", detail: "对照目标照片，调整距离和焦段再拍一次" };
   }
   return { tone: "miss", title: "还差一点", detail: "换个角度，让物品完整出现在画面里" };
 }

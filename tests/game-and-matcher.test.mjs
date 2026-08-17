@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInitialGameState, gameReducer, getCurrentTargetId } from "../app/core/game.js";
+import { buildZoomPresets, readTorchInfo, readZoomInfo } from "../app/core/camera.js";
 import {
   compareImageDescriptors,
   createMockMatcher,
@@ -93,6 +94,33 @@ test("图片描述完全相同时相似度为 100%", () => {
     structureGrid: Array(64).fill(0.2),
   };
   assert.equal(compareImageDescriptors(descriptor, descriptor), 1);
+});
+
+test("摄像头焦段只显示设备实际支持的倍率", () => {
+  assert.deepEqual(buildZoomPresets(0.5, 3, 0.1), [0.5, 1, 2, 3]);
+  assert.deepEqual(buildZoomPresets(1, 2, 0.1), [1, 2]);
+  assert.deepEqual(buildZoomPresets(1, 1, 0.1), []);
+});
+
+test("可从摄像头轨道读取当前焦段", () => {
+  const track = {
+    getCapabilities: () => ({ zoom: { min: 1, max: 4, step: 0.1 } }),
+    getSettings: () => ({ zoom: 1.5 }),
+  };
+  assert.deepEqual(readZoomInfo(track), { min: 1, max: 4, step: 0.1, value: 1.5, presets: [1, 2, 4] });
+});
+
+test("只在摄像头明确支持时显示补光", () => {
+  const supportedTrack = {
+    getCapabilities: () => ({ torch: true }),
+    getSettings: () => ({ torch: false }),
+  };
+  const unsupportedTrack = {
+    getCapabilities: () => ({}),
+    getSettings: () => ({}),
+  };
+  assert.deepEqual(readTorchInfo(supportedTrack), { supported: true, enabled: false });
+  assert.equal(readTorchInfo(unsupportedTrack), null);
 });
 
 test("matcher 结果被约束到稳定接口", () => {

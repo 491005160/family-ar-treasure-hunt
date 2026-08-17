@@ -17,6 +17,8 @@ import {
 import { FAILURE_ASSIST_THRESHOLD, failureHelp, feedbackForMatch, formatConfidence } from "./core/ui.js";
 
 type Feedback = { tone: string; title: string; detail: string };
+type ZoomInfo = { min: number; max: number; step: number; value: number; presets: number[] };
+type TorchInfo = { supported: boolean; enabled: boolean };
 
 const TARGET_IDS = TARGETS.map((target) => target.id);
 
@@ -26,6 +28,8 @@ export default function Home() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraCount, setCameraCount] = useState(0);
+  const [zoomInfo, setZoomInfo] = useState<ZoomInfo | null>(null);
+  const [torchInfo, setTorchInfo] = useState<TorchInfo | null>(null);
   const [isMatching, setIsMatching] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -65,6 +69,8 @@ export default function Home() {
       const info = await cameraRef.current?.start(videoRef.current);
       setCameraActive(true);
       setCameraCount(info?.deviceCount ?? 1);
+      setZoomInfo(info?.zoom ?? null);
+      setTorchInfo(info?.torch ?? null);
       dispatch({ type: "START" });
     } catch (error) {
       setCameraActive(false);
@@ -77,6 +83,8 @@ export default function Home() {
   const enterDemoMode = () => {
     setCameraError(null);
     setCameraActive(false);
+    setZoomInfo(null);
+    setTorchInfo(null);
     dispatch({ type: "START" });
   };
 
@@ -106,9 +114,30 @@ export default function Home() {
 
   const switchCamera = async () => {
     try {
-      await cameraRef.current?.switchCamera();
+      const info = await cameraRef.current?.switchCamera();
+      setCameraCount(info?.deviceCount ?? cameraCount);
+      setZoomInfo(info?.zoom ?? null);
+      setTorchInfo(info?.torch ?? null);
     } catch (error) {
       setFeedback({ tone: "miss", title: "切换失败", detail: cameraErrorMessage(error) });
+    }
+  };
+
+  const changeZoom = async (value: number) => {
+    try {
+      const zoom = await cameraRef.current?.setZoom(value);
+      setZoomInfo(zoom ?? null);
+    } catch (error) {
+      setFeedback({ tone: "miss", title: "变焦失败", detail: cameraErrorMessage(error) });
+    }
+  };
+
+  const toggleTorch = async () => {
+    try {
+      const torch = await cameraRef.current?.setTorch(!torchInfo?.enabled);
+      setTorchInfo(torch ?? null);
+    } catch (error) {
+      setFeedback({ tone: "miss", title: "补光开启失败", detail: cameraErrorMessage(error) });
     }
   };
 
@@ -123,6 +152,8 @@ export default function Home() {
     if (!keepPlaying) {
       cameraRef.current?.stop();
       setCameraActive(false);
+      setZoomInfo(null);
+      setTorchInfo(null);
     }
   };
 
@@ -195,8 +226,8 @@ export default function Home() {
           <header className="hunt-header">
             <div className="hud-row">
               <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/4</span></div>
-              <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "相似度 ≥ 88%"}</div>
-              {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>↻</button>}
+              <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "寻找当前宝藏"}</div>
+              {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>镜头</button>}
             </div>
             <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
               {TARGETS.map((target, index) => {
@@ -229,6 +260,31 @@ export default function Home() {
           <div className="focus-frame" aria-hidden="true"><i /><i /><i /><i /></div>
 
           <div className="hunt-footer">
+            {(zoomInfo?.presets.length ?? 0) > 1 || torchInfo?.supported ? (
+              <div className="camera-tools">
+                {zoomInfo && zoomInfo.presets.length > 1 && (
+                  <div className="zoom-controls" aria-label="摄像头焦段">
+                    {zoomInfo.presets.map((value) => (
+                      <button
+                        className={Math.abs(zoomInfo.value - value) < zoomInfo.step / 2 + 0.001 ? "is-active" : ""}
+                        type="button"
+                        key={value}
+                        aria-label={`切换到 ${formatZoom(value)} 倍焦段`}
+                        aria-pressed={Math.abs(zoomInfo.value - value) < zoomInfo.step / 2 + 0.001}
+                        onClick={() => changeZoom(value)}
+                      >
+                        {formatZoom(value)}×
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {torchInfo?.supported && (
+                  <button className={`torch-control ${torchInfo.enabled ? "is-active" : ""}`} type="button" aria-label={torchInfo.enabled ? "关闭补光" : "打开补光"} aria-pressed={torchInfo.enabled} onClick={toggleTorch}>
+                    <span aria-hidden="true">⚡</span>补光
+                  </button>
+                )}
+              </div>
+            ) : null}
             {failureHelp(game.consecutiveFailures) && (
               <div className="assist-card" role="status">
                 <strong>{game.consecutiveFailures >= 5 ? (debugEnabled ? "启用降级通道" : "识别未通过") : "试试这样拍"}</strong>
@@ -297,4 +353,8 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+function formatZoom(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
 }
