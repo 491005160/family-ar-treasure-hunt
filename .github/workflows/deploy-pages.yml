@@ -31,6 +31,8 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Build static site
         run: npm run build
+      - name: Prepare GitHub Pages assets
+        run: npm run prepare:pages
       - name: Test exported site
         run: npm test && npm run test:static
       - name: Upload Pages artifact
