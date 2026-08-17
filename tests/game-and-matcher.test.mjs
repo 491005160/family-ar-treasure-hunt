@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInitialGameState, gameReducer, getCurrentTargetId } from "../app/core/game.js";
-import { createMockMatcher, makeDebugMatch, normalizeMatchResult } from "../app/core/matcher.js";
+import {
+  compareImageDescriptors,
+  createMockMatcher,
+  createReferenceMatcher,
+  makeDebugMatch,
+  normalizeMatchResult,
+} from "../app/core/matcher.js";
 import { TARGETS } from "../app/core/targets.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
 
@@ -49,6 +55,44 @@ test("mock matcher 固定一次失败、一次成功", async () => {
   assert.equal(miss.matched, false);
   assert.equal(match.matched, true);
   assert.equal(match.targetId, targetIds[0]);
+});
+
+test("普通 matcher 只有达到 88% 才通过当前目标", async () => {
+  const referenceDescriptor = {
+    histogram: Array(24).fill(1 / 8),
+    colorGrid: Array(192).fill(0.5),
+    structureGrid: Array(64).fill(0),
+  };
+  const wrongDescriptor = {
+    histogram: Array(24).fill(0),
+    colorGrid: Array(192).fill(0),
+    structureGrid: Array(64).fill(3),
+  };
+  let captureDescriptor = wrongDescriptor;
+  const matcher = createReferenceMatcher({
+    describeCapture: async () => captureDescriptor,
+    describeReference: async () => referenceDescriptor,
+  });
+  const context = { targets: TARGETS, foundIds: [] };
+
+  const miss = await matcher.match({ blob: {} }, context);
+  assert.equal(miss.matched, false);
+  assert.ok(miss.confidence < 0.88);
+
+  captureDescriptor = referenceDescriptor;
+  const match = await matcher.match({ blob: {} }, context);
+  assert.equal(match.matched, true);
+  assert.equal(match.targetId, targetIds[0]);
+  assert.equal(match.confidence, 1);
+});
+
+test("图片描述完全相同时相似度为 100%", () => {
+  const descriptor = {
+    histogram: Array(24).fill(0),
+    colorGrid: Array(192).fill(0.4),
+    structureGrid: Array(64).fill(0.2),
+  };
+  assert.equal(compareImageDescriptors(descriptor, descriptor), 1);
 });
 
 test("matcher 结果被约束到稳定接口", () => {

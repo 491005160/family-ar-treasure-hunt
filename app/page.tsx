@@ -5,7 +5,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
 import { TARGETS, getTarget } from "./core/targets.js";
-import { createMockMatcher, makeDebugMatch } from "./core/matcher.js";
+import { createMockMatcher, createReferenceMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
   createInitialGameState,
@@ -32,10 +32,14 @@ export default function Home() {
   const [debugEnabled] = useState(
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1",
   );
+  const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
-  const matcher = useMemo(() => createMockMatcher(), []);
+  const matcher = useMemo(
+    () => debugEnabled ? createMockMatcher() : createReferenceMatcher(),
+    [debugEnabled],
+  );
 
   useEffect(() => {
     cameraRef.current = new CameraController();
@@ -113,6 +117,7 @@ export default function Home() {
     clearStoredGame();
     setFeedback(null);
     setLastCapture(null);
+    setPreviewTargetId(null);
     setDebugOpen(false);
     dispatch({ type: "RESET", keepPlaying });
     if (!keepPlaying) {
@@ -122,6 +127,7 @@ export default function Home() {
   };
 
   const currentTargetId = getCurrentTargetId(TARGET_IDS, game.foundIds);
+  const previewTarget = previewTargetId ? getTarget(previewTargetId) : null;
 
   if (game.phase === "complete") {
     return (
@@ -189,7 +195,7 @@ export default function Home() {
           <header className="hunt-header">
             <div className="hud-row">
               <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/4</span></div>
-              <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "寻找当前宝藏"}</div>
+              <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "相似度 ≥ 88%"}</div>
               {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>↻</button>}
             </div>
             <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
@@ -204,9 +210,15 @@ export default function Home() {
                 return (
                   <div className={slotClassName} key={target.id} style={{ "--slot-color": target.color } as React.CSSProperties}>
                     <small>0{index + 1}</small>
-                    <span className="slot-visual" aria-label={found ? `已找到${target.name}` : current ? `当前目标：${target.name}` : "尚未解锁"}>
+                    <button
+                      className="slot-visual"
+                      type="button"
+                      aria-label={found ? `查看已找到的${target.name}` : current ? `放大当前目标：${target.name}` : "尚未解锁"}
+                      disabled={!found && !current}
+                      onClick={() => setPreviewTargetId(target.id)}
+                    >
                       {found || current ? <img src={target.referenceImages[0]} alt="" /> : "?"}
-                    </span>
+                    </button>
                     <b>{found || current ? target.shortName : "未知"}</b>
                   </div>
                 );
@@ -219,7 +231,7 @@ export default function Home() {
           <div className="hunt-footer">
             {failureHelp(game.consecutiveFailures) && (
               <div className="assist-card" role="status">
-                <strong>{game.consecutiveFailures >= 5 ? "启用降级通道" : "试试这样拍"}</strong>
+                <strong>{game.consecutiveFailures >= 5 ? (debugEnabled ? "启用降级通道" : "识别未通过") : "试试这样拍"}</strong>
                 <span>{failureHelp(game.consecutiveFailures)}</span>
                 {debugEnabled && <button type="button" onClick={() => setDebugOpen(true)}>打开调试模式</button>}
               </div>
@@ -237,6 +249,18 @@ export default function Home() {
             <div className={`feedback-toast ${feedback.tone}`} role="status" aria-live="polite">
               <span aria-hidden="true">{feedback.tone === "success" ? "★" : "↗"}</span>
               <div><strong>{feedback.title}</strong><small>{feedback.detail}</small></div>
+            </div>
+          )}
+
+          {previewTarget && (
+            <div className="preview-backdrop" role="dialog" aria-modal="true" aria-label="目标参考图预览">
+              <button className="preview-dismiss-layer" type="button" aria-label="关闭图片预览" onClick={() => setPreviewTargetId(null)} />
+              <div className="preview-card">
+                <button className="preview-close" type="button" aria-label="关闭图片预览" onClick={() => setPreviewTargetId(null)}>×</button>
+                <img src={previewTarget.referenceImages[0]} alt={previewTarget.name} />
+                <strong>{previewTarget.name}</strong>
+                <p>{previewTarget.clue}</p>
+              </div>
             </div>
           )}
 
