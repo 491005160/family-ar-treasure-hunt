@@ -9,12 +9,11 @@ export function feedbackForMatch(result, target) {
 
 export function failureHelp(count) {
   if (count < FAILURE_ASSIST_THRESHOLD) return null;
-  if (count < 5) return "识别有点困难：靠近一点、保持光线充足，或打开调试模式继续测试。";
-  return "别卡在这里：可以直接用调试模式点亮当前宝藏，稍后再补参考图。";
+  if (count < 5) return "识别有点困难：靠近一点、保持光线充足，或换个角度再拍。";
+  return "先别着急：让目标占据取景框中央，请家人帮忙调整光线后再试。";
 }
 
 export function formatConfidence(confidence) {
   if (!Number.isFinite(confidence)) return "—";
   return `${Math.round(confidence * 100)}%`;
 }
-

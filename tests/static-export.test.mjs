@@ -9,6 +9,8 @@ test("静态导出包含家庭寻宝开始页", async () => {
   assert.match(html, /<title>家庭实景寻宝<\/title>/i);
   assert.match(html, /准备好/);
   assert.match(html, /开始寻宝/);
+  assert.doesNotMatch(html, />调试</);
+  assert.doesNotMatch(html, /MOCK 演示识别/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/i);
 });
 

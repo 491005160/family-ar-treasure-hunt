@@ -9,6 +9,7 @@ import { createMockMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
   createInitialGameState,
+  getCurrentTargetId,
   gameReducer,
   readStoredGame,
   writeStoredGame,
@@ -28,6 +29,9 @@ export default function Home() {
   const [isMatching, setIsMatching] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [debugEnabled] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1",
+  );
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
@@ -117,6 +121,8 @@ export default function Home() {
     }
   };
 
+  const currentTargetId = getCurrentTargetId(TARGET_IDS, game.foundIds);
+
   if (game.phase === "complete") {
     return (
       <main className="app-shell complete-shell">
@@ -176,19 +182,25 @@ export default function Home() {
           <header className="hunt-header">
             <div className="hud-row">
               <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/4</span></div>
-              <div className="mode-pill">MOCK 演示识别</div>
+              <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "寻找当前宝藏"}</div>
               {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>↻</button>}
             </div>
             <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
               {TARGETS.map((target, index) => {
                 const found = game.foundIds.includes(target.id);
+                const current = target.id === currentTargetId;
+                const slotClassName = [
+                  "treasure-slot",
+                  found ? "is-found" : "",
+                  current ? "is-current" : "",
+                ].filter(Boolean).join(" ");
                 return (
-                  <div className={found ? "treasure-slot is-found" : "treasure-slot"} key={target.id} style={{ "--slot-color": target.color } as React.CSSProperties}>
+                  <div className={slotClassName} key={target.id} style={{ "--slot-color": target.color } as React.CSSProperties}>
                     <small>0{index + 1}</small>
-                    <span className="slot-visual" aria-label={found ? `已找到${target.name}` : "尚未找到"}>
-                      {found ? <img src={target.referenceImages[0]} alt="" /> : "?"}
+                    <span className="slot-visual" aria-label={found ? `已找到${target.name}` : current ? `当前目标：${target.name}` : "尚未解锁"}>
+                      {found || current ? <img src={target.referenceImages[0]} alt="" /> : "?"}
                     </span>
-                    <b>{found ? target.shortName : "未知"}</b>
+                    <b>{found || current ? target.shortName : "未知"}</b>
                   </div>
                 );
               })}
@@ -202,14 +214,16 @@ export default function Home() {
               <div className="assist-card" role="status">
                 <strong>{game.consecutiveFailures >= 5 ? "启用降级通道" : "试试这样拍"}</strong>
                 <span>{failureHelp(game.consecutiveFailures)}</span>
-                <button type="button" onClick={() => setDebugOpen(true)}>打开调试模式</button>
+                {debugEnabled && <button type="button" onClick={() => setDebugOpen(true)}>打开调试模式</button>}
               </div>
             )}
             <p className="capture-hint">{isMatching ? "正在辨认宝藏…" : "把目标放进取景框"}</p>
             <button className={`capture-button ${isMatching ? "is-busy" : ""}`} type="button" aria-label="拍摄并识别" onClick={takePhoto} disabled={isMatching}><span /></button>
-            <button className="debug-trigger" type="button" onClick={() => setDebugOpen(true)} aria-label="打开调试模式">
-              调试{game.consecutiveFailures >= FAILURE_ASSIST_THRESHOLD && <i />}
-            </button>
+            {debugEnabled && (
+              <button className="debug-trigger" type="button" onClick={() => setDebugOpen(true)} aria-label="打开调试模式">
+                调试{game.consecutiveFailures >= FAILURE_ASSIST_THRESHOLD && <i />}
+              </button>
+            )}
           </div>
 
           {feedback && (
@@ -219,7 +233,7 @@ export default function Home() {
             </div>
           )}
 
-          {debugOpen && (
+          {debugEnabled && debugOpen && (
             <div className="debug-backdrop">
               <button className="debug-dismiss-layer" type="button" aria-label="关闭调试模式" onClick={() => setDebugOpen(false)} />
               <aside className="debug-panel" role="dialog" aria-modal="true" aria-labelledby="debug-title">

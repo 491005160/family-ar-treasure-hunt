@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createInitialGameState, gameReducer } from "../app/core/game.js";
+import { createInitialGameState, gameReducer, getCurrentTargetId } from "../app/core/game.js";
 import { createMockMatcher, makeDebugMatch, normalizeMatchResult } from "../app/core/matcher.js";
 import { TARGETS } from "../app/core/targets.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
@@ -23,6 +23,12 @@ test("重复目标不会重复增加进度", () => {
   state = gameReducer(state, { type: "MATCH_RESULT", result, targetIds });
   assert.equal(state.foundIds.length, 1);
   assert.equal(state.lastMatch.accepted, false);
+});
+
+test("当前章节依次显示对应目标", () => {
+  assert.equal(getCurrentTargetId(targetIds, []), targetIds[0]);
+  assert.equal(getCurrentTargetId(targetIds, [targetIds[0]]), targetIds[1]);
+  assert.equal(getCurrentTargetId(targetIds, targetIds), null);
 });
 
 test("mock matcher 固定一次失败、一次成功", async () => {
@@ -48,7 +54,6 @@ test("matcher 结果被约束到稳定接口", () => {
 
 test("连续三次失败后出现降级提示", () => {
   assert.equal(failureHelp(2), null);
-  assert.match(failureHelp(3), /调试模式/);
-  assert.match(failureHelp(5), /别卡在这里/);
+  assert.match(failureHelp(3), /换个角度/);
+  assert.match(failureHelp(5), /家人帮忙/);
 });
-

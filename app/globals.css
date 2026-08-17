@@ -172,6 +172,8 @@ h1 {
 .treasure-slot .slot-visual { width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; }
 .slot-visual img { width: 100%; height: 100%; object-fit: cover; }
 .treasure-slot b { margin-top: 6px; font-size: 9px; }
+.treasure-slot.is-current { border: 2px solid var(--yellow); color: #fff; background: rgba(30,42,35,.76); box-shadow: 0 0 22px rgba(255,200,61,.34); }
+.treasure-slot.is-current .slot-visual { width: 38px; height: 38px; border: 1px solid rgba(255,255,255,.55); }
 .treasure-slot.is-found { border: 2px solid var(--slot-color); color: #fff; background: color-mix(in srgb, var(--slot-color) 28%, rgba(7,21,28,.82)); box-shadow: 0 0 22px color-mix(in srgb, var(--slot-color) 42%, transparent); }
 
 .focus-frame { position: absolute; z-index: 2; left: 50%; top: 49%; width: min(66vw, 270px); aspect-ratio: 1; transform: translate(-50%, -50%); opacity: .7; }

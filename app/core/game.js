@@ -10,6 +10,10 @@ export function createInitialGameState() {
   };
 }
 
+export function getCurrentTargetId(targetIds, foundIds) {
+  return targetIds.find((targetId) => !foundIds.includes(targetId)) ?? null;
+}
+
 export function gameReducer(state, action) {
   switch (action.type) {
     case "START":
