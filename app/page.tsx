@@ -40,7 +40,6 @@ export default function Home() {
   const [starting, setStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
-  const [cameraCount, setCameraCount] = useState(0);
   const [zoomInfo, setZoomInfo] = useState<ZoomInfo | null>(null);
   const [torchInfo, setTorchInfo] = useState<TorchInfo | null>(null);
   const [isMatching, setIsMatching] = useState(false);
@@ -89,7 +88,6 @@ export default function Home() {
     try {
       const info = await cameraRef.current?.start(videoRef.current);
       setCameraActive(true);
-      setCameraCount(info?.deviceCount ?? 1);
       setZoomInfo(info?.zoom ?? null);
       setTorchInfo(info?.torch ?? null);
       dispatch({ type: "START" });
@@ -132,17 +130,6 @@ export default function Home() {
       setFeedback({ tone: "miss", title: "这次没拍好", detail: "请稳住手机再试一次" });
     } finally {
       setIsMatching(false);
-    }
-  };
-
-  const switchCamera = async () => {
-    try {
-      const info = await cameraRef.current?.switchCamera();
-      setCameraCount(info?.deviceCount ?? cameraCount);
-      setZoomInfo(info?.zoom ?? null);
-      setTorchInfo(info?.torch ?? null);
-    } catch (error) {
-      setFeedback({ tone: "miss", title: "切换失败", detail: cameraErrorMessage(error) });
     }
   };
 
@@ -304,7 +291,6 @@ export default function Home() {
             <div className="hud-row">
               <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/4</span></div>
               <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "寻找当前宝藏"}</div>
-              {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>镜头</button>}
             </div>
             <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
               {activeTargets.map((target, index) => {

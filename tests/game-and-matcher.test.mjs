@@ -130,8 +130,9 @@ test("截图区域按 object-fit cover 映射到相机源画面", () => {
 });
 
 test("摄像头焦段只显示设备实际支持的倍率", () => {
-  assert.deepEqual(buildZoomPresets(0.5, 3, 0.1), [0.5, 1, 2, 3]);
+  assert.deepEqual(buildZoomPresets(0.5, 3, 0.1), [1, 2]);
   assert.deepEqual(buildZoomPresets(1, 2, 0.1), [1, 2]);
+  assert.deepEqual(buildZoomPresets(1, 1.5, 0.1), [1]);
   assert.deepEqual(buildZoomPresets(1, 1, 0.1), []);
 });
 
@@ -140,7 +141,7 @@ test("可从摄像头轨道读取当前焦段", () => {
     getCapabilities: () => ({ zoom: { min: 1, max: 4, step: 0.1 } }),
     getSettings: () => ({ zoom: 1.5 }),
   };
-  assert.deepEqual(readZoomInfo(track), { min: 1, max: 4, step: 0.1, value: 1.5, presets: [1, 2, 4] });
+  assert.deepEqual(readZoomInfo(track), { min: 1, max: 4, step: 0.1, value: 1.5, presets: [1, 2] });
 });
 
 test("只在摄像头明确支持时显示补光", () => {

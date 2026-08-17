@@ -1,42 +1,40 @@
 export class CameraController {
   constructor() {
     this.stream = null;
-    this.devices = [];
-    this.deviceIndex = 0;
     this.videoElement = null;
   }
 
-  async start(videoElement, deviceId) {
+  async start(videoElement) {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("当前浏览器不支持摄像头访问，请使用最新版手机浏览器。");
     }
 
     this.stop();
     this.videoElement = videoElement;
-    const video = deviceId
-      ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-      : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } };
+    const video = {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    };
 
     this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
     videoElement.srcObject = this.stream;
     await videoElement.play();
 
-    const allDevices = await navigator.mediaDevices.enumerateDevices();
-    this.devices = allDevices.filter((device) => device.kind === "videoinput");
-    const activeId = this.stream.getVideoTracks()[0]?.getSettings().deviceId;
-    this.deviceIndex = Math.max(0, this.devices.findIndex((device) => device.deviceId === activeId));
+    const track = this.stream.getVideoTracks()[0];
+    let zoom = readZoomInfo(track);
+    if (zoom?.presets.includes(1) && Math.abs(zoom.value - 1) >= zoom.step / 2) {
+      try {
+        await track.applyConstraints({ advanced: [{ zoom: 1 }] });
+        zoom = readZoomInfo(track);
+      } catch {
+        // 个别浏览器会公开 zoom 能力但拒绝初始化约束，保留系统默认焦段即可。
+      }
+    }
     return {
-      deviceCount: this.devices.length,
-      activeDeviceId: activeId,
-      zoom: readZoomInfo(this.stream.getVideoTracks()[0]),
-      torch: readTorchInfo(this.stream.getVideoTracks()[0]),
+      zoom,
+      torch: readTorchInfo(track),
     };
-  }
-
-  async switchCamera() {
-    if (!this.videoElement || this.devices.length < 2) return null;
-    this.deviceIndex = (this.deviceIndex + 1) % this.devices.length;
-    return this.start(this.videoElement, this.devices[this.deviceIndex].deviceId);
   }
 
   async setZoom(value) {
@@ -84,7 +82,7 @@ export function readZoomInfo(track) {
 
 export function buildZoomPresets(min, max, step = 0.1) {
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  return [...new Set([min, 0.5, 1, 2, max]
+  return [...new Set([1, 2]
     .filter((value) => value >= min && value <= max)
     .map((value) => snapZoom(value, min, max, step)))]
     .sort((first, second) => first - second);
