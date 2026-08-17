@@ -32,8 +32,10 @@ export function gameReducer(state, action) {
         lastMatch: { ...result, accepted: isNewMatch, at: new Date().toISOString() },
       };
     }
-    case "RESTORE":
-      return sanitizeRestoredState(action.state, action.targetIds);
+    case "RESTORE": {
+      const restored = sanitizeRestoredState(action.state, action.targetIds);
+      return restored.phase === "playing" ? { ...restored, phase: "start" } : restored;
+    }
     case "RESET":
       return { ...createInitialGameState(), phase: action.keepPlaying ? "playing" : "start" };
     default:

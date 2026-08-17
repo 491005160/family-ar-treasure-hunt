@@ -111,6 +111,7 @@ h1 {
 .primary-button span:first-child { flex: 1; text-align: center; font-size: 18px; }
 .primary-button span:last-child { font-size: 26px; }
 .permission-note { margin: 24px 0 0; color: #7d8989; font-size: 12px; }
+.restart-button { margin-top: 13px; padding: 7px 10px; border: 0; color: #66777b; background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 .permission-card {
   width: min(100%, 340px);

@@ -31,6 +31,16 @@ test("当前章节依次显示对应目标", () => {
   assert.equal(getCurrentTargetId(targetIds, targetIds), null);
 });
 
+test("刷新恢复进度时先回开始页重新请求摄像头", () => {
+  const restored = gameReducer(createInitialGameState(), {
+    type: "RESTORE",
+    state: { phase: "playing", foundIds: targetIds.slice(0, 2) },
+    targetIds,
+  });
+  assert.equal(restored.phase, "start");
+  assert.deepEqual(restored.foundIds, targetIds.slice(0, 2));
+});
+
 test("mock matcher 固定一次失败、一次成功", async () => {
   const matcher = createMockMatcher();
   const context = { targets: TARGETS, foundIds: [] };

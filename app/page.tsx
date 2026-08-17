@@ -156,11 +156,18 @@ export default function Home() {
           <div className="brand-mark" aria-hidden="true"><span className="brand-map">⌖</span><span className="brand-spark">✦</span></div>
           <p className="eyebrow">家庭探险 · 01</p>
           <h1 id="start-title">准备好<br />寻宝了吗？</h1>
-          <p className="intro">仔细观察家里的每个角落，<br />找齐 4 件神秘宝藏。</p>
+          <p className="intro">
+            {game.foundIds.length > 0
+              ? <>上次已找到 {game.foundIds.length}/4 件宝藏，<br />重新打开摄像头继续出发。</>
+              : <>仔细观察家里的每个角落，<br />找齐 4 件神秘宝藏。</>}
+          </p>
           <button className="primary-button" type="button" onClick={startCamera} disabled={starting}>
-            <span>{starting ? "正在打开摄像头…" : "开始寻宝"}</span><span aria-hidden="true">→</span>
+            <span>{starting ? "正在打开摄像头…" : game.foundIds.length > 0 ? `继续寻宝 ${game.foundIds.length}/4` : "开始寻宝"}</span><span aria-hidden="true">→</span>
           </button>
           <p className="permission-note">开始后需要使用后置摄像头</p>
+          {game.foundIds.length > 0 && (
+            <button className="restart-button" type="button" onClick={() => resetGame(false)}>清除进度，重新开始</button>
+          )}
           {cameraError && (
             <div className="permission-card" role="alert">
               <strong>还没看到摄像头</strong>
