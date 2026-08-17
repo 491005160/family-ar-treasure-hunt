@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
-import { TARGETS, getTarget } from "./core/targets.js";
+import { TARGETS, createConfiguredTargets, getTarget } from "./core/targets.js";
 import { createEmbeddingMatcher, createMockMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
@@ -33,6 +33,7 @@ type MatchResult = {
 };
 
 const TARGET_IDS = TARGETS.map((target) => target.id);
+type CustomReferences = Record<string, string[]>;
 
 export default function Home() {
   const [game, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
@@ -51,9 +52,12 @@ export default function Home() {
   const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const [lastRecognition, setLastRecognition] = useState<string | null>(null);
+  const [customReferences, setCustomReferences] = useState<CustomReferences>({});
   const videoRef = useRef<HTMLVideoElement>(null);
   const focusFrameRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
+  const customReferenceUrlsRef = useRef<CustomReferences>({});
+  const activeTargets = useMemo(() => createConfiguredTargets(customReferences), [customReferences]);
   const matcher = useMemo(
     () => debugEnabled ? createMockMatcher() : createEmbeddingMatcher(),
     [debugEnabled],
@@ -63,7 +67,10 @@ export default function Home() {
     cameraRef.current = new CameraController();
     const restored = readStoredGame(TARGET_IDS);
     if (restored) dispatch({ type: "RESTORE", state: restored, targetIds: TARGET_IDS });
-    return () => cameraRef.current?.stop();
+    return () => {
+      cameraRef.current?.stop();
+      revokeReferenceUrls(customReferenceUrlsRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -86,7 +93,7 @@ export default function Home() {
       setZoomInfo(info?.zoom ?? null);
       setTorchInfo(info?.torch ?? null);
       dispatch({ type: "START" });
-      void matcher.prepare?.(TARGETS).catch(() => undefined);
+      void matcher.prepare?.(activeTargets).catch(() => undefined);
     } catch (error) {
       setCameraActive(false);
       setCameraError(cameraErrorMessage(error));
@@ -105,7 +112,7 @@ export default function Home() {
 
   const submitResult = (result: MatchResult) => {
     const accepted = result.matched && TARGET_IDS.includes(result.targetId) && !game.foundIds.includes(result.targetId);
-    const target = accepted ? getTarget(result.targetId) : null;
+    const target = accepted ? getTarget(result.targetId, activeTargets) : null;
     dispatch({ type: "MATCH_RESULT", result, targetIds: TARGET_IDS });
     setFeedback(feedbackForMatch({ ...result, accepted }, target));
   };
@@ -117,7 +124,7 @@ export default function Home() {
       const capture = await captureFrame(videoRef.current, { frameElement: focusFrameRef.current });
       setLastCapture(capture.fullDataUrl);
       setLastRecognition(capture.recognitionDataUrl);
-      const result = await matcher.match(capture, { targets: TARGETS, foundIds: game.foundIds });
+      const result = await matcher.match(capture, { targets: activeTargets, foundIds: game.foundIds });
       submitResult(result);
     } catch (error) {
       const result = { matched: false, targetId: null, confidence: 0, provider: "error", reason: cameraErrorMessage(error) };
@@ -174,8 +181,36 @@ export default function Home() {
     }
   };
 
+  const chooseTreasurePhotos = (targetId: string, files: FileList | null) => {
+    const selected = Array.from(files ?? []).filter((file) => file.type.startsWith("image/")).slice(0, 5);
+    if (!selected.length) return;
+
+    revokeReferenceUrls({ [targetId]: customReferenceUrlsRef.current[targetId] ?? [] });
+    const urls = selected.map((file) => URL.createObjectURL(file));
+    customReferenceUrlsRef.current = { ...customReferenceUrlsRef.current, [targetId]: urls };
+    matcher.reset();
+    clearStoredGame();
+    dispatch({ type: "RESET", keepPlaying: false });
+    setCustomReferences((current) => ({ ...current, [targetId]: urls }));
+  };
+
+  const restoreDefaultTreasure = (targetId: string) => {
+    revokeReferenceUrls({ [targetId]: customReferenceUrlsRef.current[targetId] ?? [] });
+    const nextUrls = { ...customReferenceUrlsRef.current };
+    delete nextUrls[targetId];
+    customReferenceUrlsRef.current = nextUrls;
+    matcher.reset();
+    clearStoredGame();
+    dispatch({ type: "RESET", keepPlaying: false });
+    setCustomReferences((current) => {
+      const next = { ...current };
+      delete next[targetId];
+      return next;
+    });
+  };
+
   const currentTargetId = getCurrentTargetId(TARGET_IDS, game.foundIds);
-  const previewTarget = previewTargetId ? getTarget(previewTargetId) : null;
+  const previewTarget = previewTargetId ? getTarget(previewTargetId, activeTargets) : null;
 
   if (game.phase === "complete") {
     return (
@@ -186,7 +221,7 @@ export default function Home() {
           <h1 id="complete-title">宝藏<br />全部找到！</h1>
           <p className="intro">你发现了家里的所有秘密，<br />今天的寻宝家就是你。</p>
           <div className="complete-grid">
-            {TARGETS.map((target) => (
+            {activeTargets.map((target) => (
               <div className="complete-treasure" key={target.id}>
                 <span aria-hidden="true"><img src={target.referenceImages[0]} alt="" /></span>
                 <small>{target.shortName}</small>
@@ -215,6 +250,31 @@ export default function Home() {
               ? <>上次已找到 {game.foundIds.length}/4 件宝藏，<br />重新打开摄像头继续出发。</>
               : <>仔细观察家里的每个角落，<br />找齐 4 件神秘宝藏。</>}
           </p>
+          <div className="treasure-picker" aria-label="开始前选择宝藏照片">
+            {activeTargets.map((target, index) => {
+              const customCount = customReferences[target.id]?.length ?? 0;
+              return (
+                <div className={`treasure-pick ${customCount ? "is-custom" : ""}`} key={target.id}>
+                  <img src={target.referenceImages[0]} alt={`宝藏 ${index + 1} 参考图`} />
+                  <span>{customCount ? `宝藏 ${index + 1} · ${customCount}张` : `示例 ${index + 1}`}</span>
+                  <label>
+                    {customCount ? "重新选择" : "更换照片"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(event) => {
+                        chooseTreasurePhotos(target.id, event.currentTarget.files);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  {customCount > 0 && <button type="button" onClick={() => restoreDefaultTreasure(target.id)}>恢复示例</button>}
+                </div>
+              );
+            })}
+          </div>
+          <p className="local-photo-note">每个宝藏可选 1～5 张 · 照片只在当前页面使用</p>
           <button className="primary-button" type="button" onClick={startCamera} disabled={starting}>
             <span>{starting ? "正在打开摄像头…" : game.foundIds.length > 0 ? `继续寻宝 ${game.foundIds.length}/4` : "开始寻宝"}</span><span aria-hidden="true">→</span>
           </button>
@@ -247,7 +307,7 @@ export default function Home() {
               {cameraCount > 1 && <button className="icon-button" type="button" aria-label="切换摄像头" onClick={switchCamera}>镜头</button>}
             </div>
             <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
-              {TARGETS.map((target, index) => {
+              {activeTargets.map((target, index) => {
                 const found = game.foundIds.includes(target.id);
                 const current = target.id === currentTargetId;
                 const slotClassName = [
@@ -347,7 +407,7 @@ export default function Home() {
                 </div>
                 <p className="debug-copy">直接点亮目标，用于测试进度、反馈与完成页。</p>
                 <div className="debug-targets">
-                  {TARGETS.map((target) => {
+                  {activeTargets.map((target) => {
                     const found = game.foundIds.includes(target.id);
                     return (
                       <button type="button" key={target.id} disabled={found} onClick={() => submitResult(makeDebugMatch(target.id))}>
@@ -358,8 +418,8 @@ export default function Home() {
                 </div>
                 <div className="match-inspector">
                   <div><span>最近结果</span><strong>{game.lastMatch ? (game.lastMatch.accepted ? "MATCH" : "MISS") : "—"}</strong></div>
-                  <div><span>Top1</span><strong>{formatMatchRank(game.lastMatch?.top1)}</strong></div>
-                  <div><span>Top2</span><strong>{formatMatchRank(game.lastMatch?.top2)}</strong></div>
+                  <div><span>Top1</span><strong>{formatMatchRank(game.lastMatch?.top1, activeTargets)}</strong></div>
+                  <div><span>Top2</span><strong>{formatMatchRank(game.lastMatch?.top2, activeTargets)}</strong></div>
                   <div><span>margin</span><strong>{formatConfidence(game.lastMatch?.margin)}</strong></div>
                   <div><span>provider</span><strong>{game.lastMatch?.provider ?? "—"}</strong></div>
                   <div><span>reason</span><strong>{game.lastMatch?.reason ?? "—"}</strong></div>
@@ -368,7 +428,7 @@ export default function Home() {
                   <div className="similarity-table" aria-label="四个目标相似度">
                     {game.lastMatch.scores.map((score: SimilarityScore) => (
                       <div key={score.targetId}>
-                        <span>{getTarget(score.targetId)?.shortName ?? score.targetId}</span>
+                        <span>{getTarget(score.targetId, activeTargets)?.shortName ?? score.targetId}</span>
                         <strong>{score.excluded ? "已排除" : formatConfidence(score.similarity)}</strong>
                       </div>
                     ))}
@@ -394,7 +454,13 @@ function formatZoom(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
 }
 
-function formatMatchRank(rank?: { targetId: string; similarity: number } | null) {
+function formatMatchRank(rank: { targetId: string; similarity: number } | null | undefined, targets: ReturnType<typeof createConfiguredTargets>) {
   if (!rank) return "—";
-  return `${getTarget(rank.targetId)?.shortName ?? rank.targetId} ${formatConfidence(rank.similarity)}`;
+  return `${getTarget(rank.targetId, targets)?.shortName ?? rank.targetId} ${formatConfidence(rank.similarity)}`;
+}
+
+function revokeReferenceUrls(references: CustomReferences) {
+  for (const urls of Object.values(references)) {
+    for (const url of urls) URL.revokeObjectURL(url);
+  }
 }

@@ -10,10 +10,19 @@ import {
   makeDebugMatch,
   normalizeMatchResult,
 } from "../app/core/matcher.js";
-import { TARGETS } from "../app/core/targets.js";
+import { TARGETS, createConfiguredTargets } from "../app/core/targets.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
 
 const targetIds = TARGETS.map((target) => target.id);
+
+test("开始前上传的参考图只替换对应宝藏并限制为五张", () => {
+  const customUrls = Array.from({ length: 7 }, (_, index) => `blob:treasure-${index}`);
+  const configured = createConfiguredTargets({ [TARGETS[0].id]: customUrls });
+  assert.equal(configured[0].customized, true);
+  assert.equal(configured[0].shortName, "宝藏 1");
+  assert.deepEqual(configured[0].referenceImages, customUrls.slice(0, 5));
+  assert.equal(configured[1], TARGETS[1]);
+});
 
 test("四个调试匹配可以完成整局", () => {
   let state = gameReducer(createInitialGameState(), { type: "START" });

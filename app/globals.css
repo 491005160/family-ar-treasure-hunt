@@ -90,6 +90,17 @@ h1 {
 
 .intro { margin: 20px 0 35px; color: #5f6e70; font-size: 15px; line-height: 1.75; }
 
+.treasure-picker { width: min(100%, 350px); display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: -15px 0 13px; }
+.treasure-pick { position: relative; min-width: 0; padding: 6px 6px 7px; border: 2px solid var(--ink); border-radius: 13px; background: rgba(255,255,255,.72); box-shadow: 2px 3px 0 var(--ink); }
+.treasure-pick.is-custom { background: #fff5ca; }
+.treasure-pick img { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; object-fit: cover; background: #dbe4df; }
+.treasure-pick > span { display: block; margin: 5px 0 4px; overflow: hidden; color: #52666b; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.treasure-pick label,
+.treasure-pick button { display: block; width: 100%; padding: 5px 2px; border: 0; border-radius: 7px; color: #fff; background: var(--ink); font-size: 8px; line-height: 1.15; cursor: pointer; }
+.treasure-pick label input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.treasure-pick button { margin-top: 4px; color: #6e7775; background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+.local-photo-note { margin: 0 0 14px; color: #7a8787; font-size: 10px; }
+
 .primary-button {
   width: min(100%, 310px);
   min-height: 64px;
@@ -274,6 +285,7 @@ h1 {
   .brand-mark { width: 70px; height: 70px; margin-bottom: 17px; }
   .brand-map { font-size: 40px; }
   .intro { margin: 12px 0 23px; }
+  .treasure-picker { margin-top: -10px; }
   .treasure-slot { height: 70px; }
   .hunt-footer { min-height: 140px; }
   .capture-button { width: 67px; height: 67px; }

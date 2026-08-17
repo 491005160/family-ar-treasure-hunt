@@ -41,6 +41,21 @@ export const TARGETS = Object.freeze([
   },
 ]);
 
-export function getTarget(targetId) {
-  return TARGETS.find((target) => target.id === targetId) ?? null;
+export function createConfiguredTargets(customReferences = {}) {
+  return TARGETS.map((target, index) => {
+    const referenceImages = customReferences[target.id];
+    if (!Array.isArray(referenceImages) || !referenceImages.length) return target;
+    return {
+      ...target,
+      name: `自选宝藏 ${index + 1}`,
+      shortName: `宝藏 ${index + 1}`,
+      clue: "这是开始前由你选择的宝藏照片",
+      referenceImages: referenceImages.slice(0, 5),
+      customized: true,
+    };
+  });
+}
+
+export function getTarget(targetId, targets = TARGETS) {
+  return targets.find((target) => target.id === targetId) ?? null;
 }

@@ -73,7 +73,9 @@ export function createMobileNetEmbedder({ modelUrl = DEFAULT_MODEL_PATH } = {}) 
         }
       }
     },
-    reset() {},
+    reset() {
+      referenceCache.clear();
+    },
   };
 }
 
