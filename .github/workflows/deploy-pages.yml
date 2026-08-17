@@ -43,10 +43,26 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment_1.outputs.page_url || steps.deployment_2.outputs.page_url || steps.deployment_3.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Deploy GitHub Pages
-        id: deployment
+        id: deployment_1
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+      - name: Wait before retrying Pages
+        if: steps.deployment_1.outcome == 'failure'
+        run: sleep 30
+      - name: Retry GitHub Pages deployment
+        if: steps.deployment_1.outcome == 'failure'
+        id: deployment_2
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+      - name: Wait before final Pages retry
+        if: steps.deployment_2.outcome == 'failure'
+        run: sleep 60
+      - name: Final GitHub Pages deployment attempt
+        if: steps.deployment_2.outcome == 'failure'
+        id: deployment_3
         uses: actions/deploy-pages@v5
