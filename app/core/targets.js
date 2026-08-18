@@ -1,7 +1,4 @@
-/**
- * 四个预设目标。真实识别接入后，把家庭实拍参考图放到 public/references，
- * 并在 referenceImages 中继续追加路径即可。
- */
+/** 四个可配置宝藏槽；内置图片仅作为项目素材，不会自动加入新关卡。 */
 export const TARGETS = Object.freeze([
   {
     id: "black-orange-figure",
@@ -42,17 +39,17 @@ export const TARGETS = Object.freeze([
 ]);
 
 export function createConfiguredTargets(customReferences = {}) {
-  return TARGETS.map((target, index) => {
+  return TARGETS.flatMap((target, index) => {
     const referenceImages = customReferences[target.id];
-    if (!Array.isArray(referenceImages) || !referenceImages.length) return target;
-    return {
+    if (!Array.isArray(referenceImages) || !referenceImages.length) return [];
+    return [{
       ...target,
       name: `自选宝藏 ${index + 1}`,
       shortName: `宝藏 ${index + 1}`,
-      clue: "这是开始前由你选择的宝藏照片",
-      referenceImages: referenceImages.slice(0, 5),
+      clue: "这是创建者选择的宝藏照片",
+      referenceImages: referenceImages.slice(0, 1),
       customized: true,
-    };
+    }];
   });
 }
 

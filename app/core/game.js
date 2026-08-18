@@ -43,25 +43,25 @@ export function gameReducer(state, action) {
   }
 }
 
-export function readStoredGame(targetIds, storage = globalThis.localStorage) {
+export function readStoredGame(targetIds, storage = globalThis.localStorage, storageKey = GAME_STORAGE_KEY) {
   try {
-    const raw = storage?.getItem(GAME_STORAGE_KEY);
+    const raw = storage?.getItem(storageKey);
     return raw ? sanitizeRestoredState(JSON.parse(raw), targetIds) : null;
   } catch {
     return null;
   }
 }
 
-export function writeStoredGame(state, storage = globalThis.localStorage) {
+export function writeStoredGame(state, storage = globalThis.localStorage, storageKey = GAME_STORAGE_KEY) {
   try {
-    storage?.setItem(GAME_STORAGE_KEY, JSON.stringify(state));
+    storage?.setItem(storageKey, JSON.stringify(state));
   } catch {
     // 本地存储不可用不影响本轮游戏。
   }
 }
 
-export function clearStoredGame(storage = globalThis.localStorage) {
-  try { storage?.removeItem(GAME_STORAGE_KEY); } catch { return; }
+export function clearStoredGame(storage = globalThis.localStorage, storageKey = GAME_STORAGE_KEY) {
+  try { storage?.removeItem(storageKey); } catch { return; }
 }
 
 function sanitizeRestoredState(value, targetIds) {

@@ -93,12 +93,18 @@ h1 {
 .treasure-picker { width: min(100%, 350px); display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: -15px 0 13px; }
 .treasure-pick { position: relative; min-width: 0; padding: 6px 6px 7px; border: 2px solid var(--ink); border-radius: 13px; background: rgba(255,255,255,.72); box-shadow: 2px 3px 0 var(--ink); }
 .treasure-pick.is-custom { background: #fff5ca; }
-.treasure-pick img { width: 100%; aspect-ratio: 1; display: block; border-radius: 8px; object-fit: cover; background: #dbe4df; }
+.treasure-pick.is-empty { border-color: #9ba8a5; color: #7c8b88; background: rgba(225,231,224,.68); box-shadow: 2px 3px 0 #9ba8a5; }
+.pick-visual { width: 100%; aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #dbe4df; }
+.pick-visual img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.pick-visual b { color: #778783; font: 700 28px/1 Arial, sans-serif; }
+.treasure-pick.is-custom .pick-visual b { color: var(--ink); }
 .treasure-pick > span { display: block; margin: 5px 0 4px; overflow: hidden; color: #52666b; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .treasure-pick label,
 .treasure-pick button { display: block; width: 100%; padding: 5px 2px; border: 0; border-radius: 7px; color: #fff; background: var(--ink); font-size: 8px; line-height: 1.15; cursor: pointer; }
 .treasure-pick label input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .treasure-pick button { margin-top: 4px; color: #6e7775; background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+.treasure-picker.is-shared .treasure-pick { padding-bottom: 5px; }
+.treasure-picker.is-shared .treasure-pick > span { margin-bottom: 1px; }
 .local-photo-note { margin: 0 0 14px; color: #7a8787; font-size: 10px; }
 .recognition-readiness { width: min(100%, 310px); min-height: 31px; display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; color: #617078; background: rgba(255,255,255,.58); font-size: 10px; line-height: 1.35; }
 .recognition-readiness i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #96a29f; }
@@ -128,6 +134,9 @@ h1 {
 .primary-button:not(:disabled):active { transform: translate(5px, 6px); box-shadow: 1px 1px 0 var(--ink); }
 .primary-button span:first-child { flex: 1; text-align: center; font-size: 18px; }
 .primary-button span:last-child { font-size: 26px; }
+.share-button { width: min(100%, 310px); min-height: 44px; margin-top: 13px; border: 2px solid var(--ink); border-radius: 14px; color: var(--ink); background: #fff; box-shadow: 3px 4px 0 var(--ink); font-size: 13px; cursor: pointer; }
+.share-button:disabled { opacity: .5; cursor: wait; }
+.share-message { width: min(100%, 310px); margin: 9px 0 -7px; color: #52666b; font-size: 11px; line-height: 1.4; }
 .permission-note { margin: 24px 0 0; color: #7d8989; font-size: 12px; }
 .restart-button { margin-top: 13px; padding: 7px 10px; border: 0; color: #66777b; background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
@@ -183,7 +192,7 @@ h1 {
 .progress-pill span { margin-left: 2px; color: rgba(255,255,255,.7); font-size: 11px; }
 .mode-pill { height: 27px; display: grid; place-items: center; padding: 0 11px; border-radius: 999px; color: #cce8dd; font: 700 9px/1 Arial, sans-serif; letter-spacing: .08em; }
 
-.treasure-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 13px; }
+.treasure-slots { display: grid; grid-template-columns: repeat(var(--treasure-count, 4), minmax(0, 1fr)); gap: 7px; margin-top: 13px; }
 .treasure-slot { position: relative; min-width: 0; height: 82px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,.22); border-radius: 16px; color: rgba(255,255,255,.38); background: rgba(7,21,28,.66); backdrop-filter: blur(10px); }
 .treasure-slot small { position: absolute; left: 7px; top: 6px; font: 700 8px/1 Arial, sans-serif; letter-spacing: .08em; }
 .treasure-slot .slot-visual { width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; padding: 0; border: 0; border-radius: 10px; color: inherit; background: transparent; font-size: 27px; line-height: 1; cursor: zoom-in; }
@@ -271,7 +280,7 @@ h1 {
 .complete-shell { background: linear-gradient(160deg, #fff7d9, #dff0df); }
 .complete-screen::before { width: 330px; height: 330px; top: -180px; left: 50%; transform: translateX(-50%); }
 .complete-burst { width: 86px; height: 86px; display: grid; place-items: center; margin-bottom: 25px; border: 3px solid var(--ink); border-radius: 50%; color: var(--ink); background: var(--yellow); box-shadow: 6px 7px 0 var(--ink); font-size: 42px; }
-.complete-grid { width: min(100%, 330px); display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: -6px 0 34px; }
+.complete-grid { width: min(100%, 330px); display: grid; grid-template-columns: repeat(var(--treasure-count, 4), minmax(0, 1fr)); gap: 8px; margin: -6px 0 34px; }
 .complete-treasure { min-width: 0; padding: 11px 5px 9px; border: 2px solid var(--ink); border-radius: 14px; background: #fff; box-shadow: 3px 3px 0 var(--ink); }
 .complete-treasure span { width: 42px; height: 42px; display: block; overflow: hidden; margin: auto; border-radius: 11px; }
 .complete-treasure span img { width: 100%; height: 100%; object-fit: cover; }

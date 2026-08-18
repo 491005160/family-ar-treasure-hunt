@@ -12,6 +12,7 @@ import {
   normalizeMatchResult,
 } from "../app/core/matcher.js";
 import { TARGETS, createConfiguredTargets } from "../app/core/targets.js";
+import { decodeSharedHunt, encodeSharedHunt } from "../app/core/share.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
 
 const targetIds = TARGETS.map((target) => target.id);
@@ -23,13 +24,32 @@ test("超时保护会释放永久等待的识别任务", async () => {
   );
 });
 
-test("开始前上传的参考图只替换对应宝藏并限制为五张", () => {
+test("开始前只启用已上传的宝藏且每槽只保留一张", () => {
   const customUrls = Array.from({ length: 7 }, (_, index) => `blob:treasure-${index}`);
   const configured = createConfiguredTargets({ [TARGETS[0].id]: customUrls });
+  assert.equal(configured.length, 1);
   assert.equal(configured[0].customized, true);
   assert.equal(configured[0].shortName, "宝藏 1");
-  assert.deepEqual(configured[0].referenceImages, customUrls.slice(0, 5));
-  assert.equal(configured[1], TARGETS[1]);
+  assert.deepEqual(configured[0].referenceImages, customUrls.slice(0, 1));
+});
+
+test("分享数据可以在另一端还原启用的宝藏", () => {
+  const references = {
+    [TARGETS[0].id]: ["data:image/jpeg;base64,AAA"],
+    [TARGETS[2].id]: ["data:image/jpeg;base64,CCC"],
+  };
+  assert.deepEqual(decodeSharedHunt(encodeSharedHunt(references)), references);
+});
+
+test("只设置一个宝藏也能完成游戏", () => {
+  const singleTargetIds = [targetIds[2]];
+  const state = gameReducer(createInitialGameState(), {
+    type: "MATCH_RESULT",
+    result: makeDebugMatch(singleTargetIds[0]),
+    targetIds: singleTargetIds,
+  });
+  assert.equal(state.phase, "complete");
+  assert.deepEqual(state.foundIds, singleTargetIds);
 });
 
 test("四个调试匹配可以完成整局", () => {

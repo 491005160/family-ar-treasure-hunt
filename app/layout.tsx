@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "家庭实景寻宝",
-  description: "打开摄像头，在家中找到四件神秘宝藏。",
+  description: "设置并分享一场包含 1～4 件宝藏的家庭实景寻宝。",
 };
 
 export const viewport: Viewport = {

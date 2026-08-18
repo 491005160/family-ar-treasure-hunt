@@ -6,6 +6,7 @@ import { withTimeout } from "./core/async.js";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
 import { TARGETS, createConfiguredTargets, getTarget } from "./core/targets.js";
+import { buildShareUrl, compressTreasureImage, parseSharedHunt, sharedHuntStorageKey } from "./core/share.js";
 import { createEmbeddingMatcher, createMockMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
@@ -20,7 +21,7 @@ import { FAILURE_ASSIST_THRESHOLD, failureHelp, feedbackForMatch, formatConfiden
 type Feedback = { tone: string; title: string; detail: string };
 type ZoomInfo = { min: number; max: number; step: number; value: number; presets: number[] };
 type TorchInfo = { supported: boolean; enabled: boolean };
-type RecognitionStatus = "loading" | "ready" | "error";
+type RecognitionStatus = "idle" | "loading" | "ready" | "error";
 type SimilarityScore = { targetId: string; similarity: number | null; excluded?: boolean; referenceCount?: number };
 type MatchResult = {
   matched: boolean;
@@ -34,7 +35,6 @@ type MatchResult = {
   margin?: number | null;
 };
 
-const TARGET_IDS = TARGETS.map((target) => target.id);
 type CustomReferences = Record<string, string[]>;
 
 export default function Home() {
@@ -54,14 +54,19 @@ export default function Home() {
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const [lastRecognition, setLastRecognition] = useState<string | null>(null);
   const [customReferences, setCustomReferences] = useState<CustomReferences>({});
-  const [recognitionStatus, setRecognitionStatus] = useState<RecognitionStatus>("loading");
+  const [recognitionStatus, setRecognitionStatus] = useState<RecognitionStatus>("idle");
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const [configurationReady, setConfigurationReady] = useState(false);
+  const [sharedMode, setSharedMode] = useState(false);
+  const [uploadingTargetId, setUploadingTargetId] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [gameStorageKey, setGameStorageKey] = useState<string | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const focusFrameRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
-  const customReferenceUrlsRef = useRef<CustomReferences>({});
   const preparationIdRef = useRef(0);
   const activeTargets = useMemo(() => createConfiguredTargets(customReferences), [customReferences]);
+  const activeTargetIds = useMemo(() => activeTargets.map((target) => target.id), [activeTargets]);
   const matcher = useMemo(
     () => debugEnabled ? createMockMatcher() : createEmbeddingMatcher(),
     [debugEnabled],
@@ -69,17 +74,30 @@ export default function Home() {
 
   useEffect(() => {
     cameraRef.current = new CameraController();
-    const restored = readStoredGame(TARGET_IDS);
-    if (restored) dispatch({ type: "RESTORE", state: restored, targetIds: TARGET_IDS });
+    const timer = window.setTimeout(() => {
+      const sharedReferences = parseSharedHunt(window.location.hash);
+      const sharedTargetIds = TARGETS.filter((target) => sharedReferences[target.id]?.length).map((target) => target.id);
+      if (sharedTargetIds.length) {
+        const storageKey = sharedHuntStorageKey(window.location.hash);
+        setSharedMode(true);
+        setCustomReferences(sharedReferences);
+        setGameStorageKey(storageKey);
+        const restored = readStoredGame(sharedTargetIds, window.localStorage, storageKey);
+        if (restored) dispatch({ type: "RESTORE", state: restored, targetIds: sharedTargetIds });
+      } else {
+        clearStoredGame();
+      }
+      setConfigurationReady(true);
+    }, 0);
     return () => {
+      window.clearTimeout(timer);
       cameraRef.current?.stop();
-      revokeReferenceUrls(customReferenceUrlsRef.current);
     };
   }, []);
 
   useEffect(() => {
-    writeStoredGame(game);
-  }, [game]);
+    if (configurationReady && activeTargetIds.length) writeStoredGame(game, window.localStorage, gameStorageKey);
+  }, [activeTargetIds.length, configurationReady, game, gameStorageKey]);
 
   useEffect(() => {
     if (!feedback) return;
@@ -88,6 +106,11 @@ export default function Home() {
   }, [feedback]);
 
   const prepareRecognition = useCallback(async () => {
+    if (!activeTargets.length) {
+      setRecognitionStatus("idle");
+      setRecognitionError(null);
+      return;
+    }
     const preparationId = ++preparationIdRef.current;
     setRecognitionStatus("loading");
     setRecognitionError(null);
@@ -106,15 +129,16 @@ export default function Home() {
   }, [activeTargets, matcher]);
 
   useEffect(() => {
+    if (!configurationReady) return;
     const timer = window.setTimeout(() => void prepareRecognition(), 0);
     return () => {
       window.clearTimeout(timer);
       preparationIdRef.current += 1;
     };
-  }, [prepareRecognition]);
+  }, [configurationReady, prepareRecognition]);
 
   const startCamera = async () => {
-    if (recognitionStatus !== "ready") return;
+    if (recognitionStatus !== "ready" || !activeTargets.length) return;
     setStarting(true);
     setCameraError(null);
     try {
@@ -140,9 +164,9 @@ export default function Home() {
   };
 
   const submitResult = (result: MatchResult) => {
-    const accepted = result.matched && TARGET_IDS.includes(result.targetId) && !game.foundIds.includes(result.targetId);
+    const accepted = result.matched && activeTargetIds.includes(result.targetId) && !game.foundIds.includes(result.targetId);
     const target = accepted ? getTarget(result.targetId, activeTargets) : null;
-    dispatch({ type: "MATCH_RESULT", result, targetIds: TARGET_IDS });
+    dispatch({ type: "MATCH_RESULT", result, targetIds: activeTargetIds });
     setFeedback(feedbackForMatch({ ...result, accepted }, target));
   };
 
@@ -161,7 +185,7 @@ export default function Home() {
       submitResult(result);
     } catch (error) {
       const result = { matched: false, targetId: null, confidence: 0, provider: "error", reason: cameraErrorMessage(error) };
-      dispatch({ type: "MATCH_RESULT", result, targetIds: TARGET_IDS });
+      dispatch({ type: "MATCH_RESULT", result, targetIds: activeTargetIds });
       setFeedback({
         tone: "miss",
         title: "这次识别没完成",
@@ -192,7 +216,7 @@ export default function Home() {
 
   const resetGame = (keepPlaying = false) => {
     matcher.reset();
-    clearStoredGame();
+    clearStoredGame(window.localStorage, gameStorageKey);
     setFeedback(null);
     setLastCapture(null);
     setLastRecognition(null);
@@ -207,26 +231,27 @@ export default function Home() {
     }
   };
 
-  const chooseTreasurePhotos = (targetId: string, files: FileList | null) => {
-    const selected = Array.from(files ?? []).filter((file) => file.type.startsWith("image/")).slice(0, 5);
-    if (!selected.length) return;
-
-    revokeReferenceUrls({ [targetId]: customReferenceUrlsRef.current[targetId] ?? [] });
-    const urls = selected.map((file) => URL.createObjectURL(file));
-    customReferenceUrlsRef.current = { ...customReferenceUrlsRef.current, [targetId]: urls };
-    matcher.reset();
-    clearStoredGame();
-    dispatch({ type: "RESET", keepPlaying: false });
-    setCustomReferences((current) => ({ ...current, [targetId]: urls }));
+  const chooseTreasurePhoto = async (targetId: string, files: FileList | null) => {
+    const selected = Array.from(files ?? []).find((file) => file.type.startsWith("image/"));
+    if (!selected) return;
+    setUploadingTargetId(targetId);
+    setShareMessage(null);
+    try {
+      const image = await compressTreasureImage(selected);
+      matcher.reset();
+      clearStoredGame(window.localStorage, gameStorageKey);
+      dispatch({ type: "RESET", keepPlaying: false });
+      setCustomReferences((current) => ({ ...current, [targetId]: [image] }));
+    } catch (error) {
+      setShareMessage(cameraErrorMessage(error));
+    } finally {
+      setUploadingTargetId(null);
+    }
   };
 
-  const restoreDefaultTreasure = (targetId: string) => {
-    revokeReferenceUrls({ [targetId]: customReferenceUrlsRef.current[targetId] ?? [] });
-    const nextUrls = { ...customReferenceUrlsRef.current };
-    delete nextUrls[targetId];
-    customReferenceUrlsRef.current = nextUrls;
+  const removeTreasure = (targetId: string) => {
     matcher.reset();
-    clearStoredGame();
+    clearStoredGame(window.localStorage, gameStorageKey);
     dispatch({ type: "RESET", keepPlaying: false });
     setCustomReferences((current) => {
       const next = { ...current };
@@ -235,7 +260,23 @@ export default function Home() {
     });
   };
 
-  const currentTargetId = getCurrentTargetId(TARGET_IDS, game.foundIds);
+  const shareHunt = async () => {
+    try {
+      const url = buildShareUrl(customReferences);
+      if (navigator.share) {
+        await navigator.share({ title: "家庭实景寻宝", text: `我藏好了 ${activeTargets.length} 个宝藏，来找找看！`, url });
+        setShareMessage("分享面板已打开");
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareMessage("分享链接已复制");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareMessage(cameraErrorMessage(error));
+    }
+  };
+
+  const currentTargetId = getCurrentTargetId(activeTargetIds, game.foundIds);
   const previewTarget = previewTargetId ? getTarget(previewTargetId, activeTargets) : null;
 
   if (game.phase === "complete") {
@@ -243,10 +284,10 @@ export default function Home() {
       <main className="app-shell complete-shell">
         <section className="complete-screen" aria-labelledby="complete-title">
           <div className="complete-burst" aria-hidden="true">★</div>
-          <p className="eyebrow">任务完成 · 4/4</p>
+          <p className="eyebrow">任务完成 · {activeTargets.length}/{activeTargets.length}</p>
           <h1 id="complete-title">宝藏<br />全部找到！</h1>
           <p className="intro">你发现了家里的所有秘密，<br />今天的寻宝家就是你。</p>
-          <div className="complete-grid">
+          <div className="complete-grid" style={{ "--treasure-count": activeTargets.length } as React.CSSProperties}>
             {activeTargets.map((target) => (
               <div className="complete-treasure" key={target.id}>
                 <span aria-hidden="true"><img src={target.referenceImages[0]} alt="" /></span>
@@ -273,38 +314,52 @@ export default function Home() {
           <h1 id="start-title">准备好<br />寻宝了吗？</h1>
           <p className="intro">
             {game.foundIds.length > 0
-              ? <>上次已找到 {game.foundIds.length}/4 件宝藏，<br />重新打开摄像头继续出发。</>
-              : <>仔细观察家里的每个角落，<br />找齐 4 件神秘宝藏。</>}
+              ? <>上次已找到 {game.foundIds.length}/{activeTargets.length} 件宝藏，<br />重新打开摄像头继续出发。</>
+              : sharedMode
+                ? <>你收到了一场家庭寻宝，<br />本局共有 {activeTargets.length} 件神秘宝藏。</>
+                : <>先放入 1～4 张宝藏照片，<br />再自己测试或分享给家人。</>}
           </p>
-          <div className="treasure-picker" aria-label="开始前选择宝藏照片">
-            {activeTargets.map((target, index) => {
-              const customCount = customReferences[target.id]?.length ?? 0;
+          <div className={`treasure-picker ${sharedMode ? "is-shared" : ""}`} aria-label={sharedMode ? "本局宝藏槽" : "开始前选择宝藏照片"}>
+            {TARGETS.map((target, index) => {
+              const image = customReferences[target.id]?.[0] ?? null;
               return (
-                <div className={`treasure-pick ${customCount ? "is-custom" : ""}`} key={target.id}>
-                  <img src={target.referenceImages[0]} alt={`宝藏 ${index + 1} 参考图`} />
-                  <span>{customCount ? `宝藏 ${index + 1} · ${customCount}张` : `示例 ${index + 1}`}</span>
-                  <label>
-                    {customCount ? "重新选择" : "更换照片"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(event) => {
-                        chooseTreasurePhotos(target.id, event.currentTarget.files);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                  {customCount > 0 && <button type="button" onClick={() => restoreDefaultTreasure(target.id)}>恢复示例</button>}
+                <div className={`treasure-pick ${image ? "is-custom" : "is-empty"}`} key={target.id}>
+                  <div className="pick-visual">
+                    {image && !sharedMode
+                      ? <img src={image} alt={`宝藏 ${index + 1} 参考图`} />
+                      : <b aria-label={image ? "已设置" : "本局未使用"}>{image ? "?" : "×"}</b>}
+                  </div>
+                  <span>{image ? `宝藏 ${index + 1}` : `空槽 ${index + 1}`}</span>
+                  {!sharedMode && (
+                    <>
+                      <label>
+                        {uploadingTargetId === target.id ? "处理中…" : image ? "更换" : "上传"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingTargetId !== null}
+                          onChange={(event) => {
+                            void chooseTreasurePhoto(target.id, event.currentTarget.files);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      {image && <button type="button" onClick={() => removeTreasure(target.id)}>移除</button>}
+                    </>
+                  )}
                 </div>
               );
             })}
           </div>
-          <p className="local-photo-note">每个宝藏可选 1～5 张 · 照片只在当前页面使用</p>
+          <p className="local-photo-note">
+            {sharedMode ? `本局启用 ${activeTargets.length} 个宝藏 · × 不参与游戏` : `已设置 ${activeTargets.length}/4 · 每个宝藏只需 1 张照片`}
+          </p>
           <div className={`recognition-readiness ${recognitionStatus}`} role="status">
             <i aria-hidden="true" />
             <span>
-              {recognitionStatus === "loading"
+              {recognitionStatus === "idle"
+                ? "请先上传至少一张宝藏照片"
+                : recognitionStatus === "loading"
                 ? "正在分析已选照片，首次约需下载 8MB"
                 : recognitionStatus === "ready"
                   ? "宝藏特征已准备好"
@@ -315,20 +370,33 @@ export default function Home() {
             className="primary-button"
             type="button"
             onClick={recognitionStatus === "error" ? prepareRecognition : startCamera}
-            disabled={starting || recognitionStatus === "loading"}
+            disabled={starting || uploadingTargetId !== null || recognitionStatus === "idle" || recognitionStatus === "loading"}
           >
             <span>
-              {recognitionStatus === "loading"
+              {recognitionStatus === "idle"
+                ? "先设置宝藏"
+                : recognitionStatus === "loading"
                 ? "正在分析宝藏照片…"
                 : recognitionStatus === "error"
                   ? "重新分析照片"
                   : starting
                     ? "正在打开摄像头…"
                     : game.foundIds.length > 0
-                      ? `继续寻宝 ${game.foundIds.length}/4`
-                      : "开始寻宝"}
+                      ? `继续寻宝 ${game.foundIds.length}/${activeTargets.length}`
+                      : sharedMode ? "开始寻宝" : "自己测试"}
             </span><span aria-hidden="true">→</span>
           </button>
+          {!sharedMode && activeTargets.length > 0 && (
+            <button
+              className="share-button"
+              type="button"
+              onClick={() => void shareHunt()}
+              disabled={recognitionStatus !== "ready" || uploadingTargetId !== null}
+            >
+              <span aria-hidden="true">↗</span> 生成分享链接
+            </button>
+          )}
+          {shareMessage && <p className="share-message" role="status">{shareMessage}</p>}
           <p className="permission-note">开始后需要使用后置摄像头</p>
           {game.foundIds.length > 0 && (
             <button className="restart-button" type="button" onClick={() => resetGame(false)}>清除进度，重新开始</button>
@@ -353,10 +421,14 @@ export default function Home() {
 
           <header className="hunt-header">
             <div className="hud-row">
-              <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/4</span></div>
+              <div className="progress-pill"><strong>{game.foundIds.length}</strong><span>/{activeTargets.length}</span></div>
               <div className="mode-pill">{debugEnabled ? "MOCK 演示识别" : "寻找当前宝藏"}</div>
             </div>
-            <div className="treasure-slots" aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 4 个`}>
+            <div
+              className="treasure-slots"
+              style={{ "--treasure-count": activeTargets.length } as React.CSSProperties}
+              aria-label={`已找到 ${game.foundIds.length} 个宝藏，共 ${activeTargets.length} 个`}
+            >
               {activeTargets.map((target, index) => {
                 const found = game.foundIds.includes(target.id);
                 const current = target.id === currentTargetId;
@@ -507,10 +579,4 @@ function formatZoom(value: number) {
 function formatMatchRank(rank: { targetId: string; similarity: number } | null | undefined, targets: ReturnType<typeof createConfiguredTargets>) {
   if (!rank) return "—";
   return `${getTarget(rank.targetId, targets)?.shortName ?? rank.targetId} ${formatConfidence(rank.similarity)}`;
-}
-
-function revokeReferenceUrls(references: CustomReferences) {
-  for (const urls of Object.values(references)) {
-    for (const url of urls) URL.revokeObjectURL(url);
-  }
 }
