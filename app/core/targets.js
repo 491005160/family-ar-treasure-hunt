@@ -38,14 +38,21 @@ export const TARGETS = Object.freeze([
   },
 ]);
 
-export function createConfiguredTargets(customReferences = {}) {
-  return TARGETS.flatMap((target, index) => {
+export const DEFAULT_TREASURE_NAME = "神秘宝藏";
+
+export function normalizeTreasureName(value) {
+  const name = typeof value === "string" ? value.trim().slice(0, 20) : "";
+  return name || DEFAULT_TREASURE_NAME;
+}
+
+export function createConfiguredTargets(customReferences = {}, customNames = {}) {
+  return TARGETS.flatMap((target) => {
     const referenceImages = customReferences[target.id];
     if (!Array.isArray(referenceImages) || !referenceImages.length) return [];
     return [{
       ...target,
-      name: `自选宝藏 ${index + 1}`,
-      shortName: `宝藏 ${index + 1}`,
+      name: normalizeTreasureName(customNames[target.id]),
+      shortName: normalizeTreasureName(customNames[target.id]),
       clue: "这是创建者选择的宝藏照片",
       referenceImages: referenceImages.slice(0, 1),
       customized: true,

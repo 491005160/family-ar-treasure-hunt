@@ -99,6 +99,8 @@ h1 {
 .pick-visual b { color: #778783; font: 700 28px/1 Arial, sans-serif; }
 .treasure-pick.is-custom .pick-visual b { color: var(--ink); }
 .treasure-pick > span { display: block; margin: 5px 0 4px; overflow: hidden; color: #52666b; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.treasure-name-input { width: 100%; height: 22px; margin: 4px 0 3px; padding: 2px 4px; border: 1px solid #aebbb7; border-radius: 6px; color: var(--ink); background: rgba(255,255,255,.86); font: 700 8px/1.2 inherit; text-align: center; text-overflow: ellipsis; }
+.treasure-name-input:focus { border-color: var(--coral); outline: 2px solid rgba(255,107,74,.22); }
 .treasure-pick label,
 .treasure-pick button { display: block; width: 100%; padding: 5px 2px; border: 0; border-radius: 7px; color: #fff; background: var(--ink); font-size: 8px; line-height: 1.15; cursor: pointer; }
 .treasure-pick label input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

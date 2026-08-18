@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { withTimeout } from "./core/async.js";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
-import { TARGETS, createConfiguredTargets, getTarget } from "./core/targets.js";
-import { buildShareUrl, compressTreasureImage, parseSharedHunt, sharedHuntStorageKey } from "./core/share.js";
+import { DEFAULT_TREASURE_NAME, TARGETS, createConfiguredTargets, getTarget, normalizeTreasureName } from "./core/targets.js";
+import { buildShareUrl, compressTreasureImage, parseSharedHunt, parseSharedHuntNames, sharedHuntStorageKey } from "./core/share.js";
 import { createEmbeddingMatcher, createMockMatcher, makeDebugMatch } from "./core/matcher.js";
 import {
   clearStoredGame,
@@ -36,6 +36,7 @@ type MatchResult = {
 };
 
 type CustomReferences = Record<string, string[]>;
+type CustomNames = Record<string, string>;
 
 export default function Home() {
   const [game, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
@@ -54,6 +55,7 @@ export default function Home() {
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const [lastRecognition, setLastRecognition] = useState<string | null>(null);
   const [customReferences, setCustomReferences] = useState<CustomReferences>({});
+  const [customNames, setCustomNames] = useState<CustomNames>({});
   const [recognitionStatus, setRecognitionStatus] = useState<RecognitionStatus>("idle");
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const [configurationReady, setConfigurationReady] = useState(false);
@@ -65,7 +67,8 @@ export default function Home() {
   const focusFrameRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
   const preparationIdRef = useRef(0);
-  const activeTargets = useMemo(() => createConfiguredTargets(customReferences), [customReferences]);
+  const recognitionTargets = useMemo(() => createConfiguredTargets(customReferences), [customReferences]);
+  const activeTargets = useMemo(() => createConfiguredTargets(customReferences, customNames), [customNames, customReferences]);
   const activeTargetIds = useMemo(() => activeTargets.map((target) => target.id), [activeTargets]);
   const matcher = useMemo(
     () => debugEnabled ? createMockMatcher() : createEmbeddingMatcher(),
@@ -76,11 +79,13 @@ export default function Home() {
     cameraRef.current = new CameraController();
     const timer = window.setTimeout(() => {
       const sharedReferences = parseSharedHunt(window.location.hash);
+      const sharedNames = parseSharedHuntNames(window.location.hash);
       const sharedTargetIds = TARGETS.filter((target) => sharedReferences[target.id]?.length).map((target) => target.id);
       if (sharedTargetIds.length) {
         const storageKey = sharedHuntStorageKey(window.location.hash);
         setSharedMode(true);
         setCustomReferences(sharedReferences);
+        setCustomNames(sharedNames);
         setGameStorageKey(storageKey);
         const restored = readStoredGame(sharedTargetIds, window.localStorage, storageKey);
         if (restored) dispatch({ type: "RESTORE", state: restored, targetIds: sharedTargetIds });
@@ -106,7 +111,7 @@ export default function Home() {
   }, [feedback]);
 
   const prepareRecognition = useCallback(async () => {
-    if (!activeTargets.length) {
+    if (!recognitionTargets.length) {
       setRecognitionStatus("idle");
       setRecognitionError(null);
       return;
@@ -116,7 +121,7 @@ export default function Home() {
     setRecognitionError(null);
     try {
       await withTimeout(
-        matcher.prepare?.(activeTargets),
+        matcher.prepare?.(recognitionTargets),
         120_000,
         "识别模型加载超时，请切换到稳定网络后重试",
       );
@@ -126,7 +131,7 @@ export default function Home() {
       setRecognitionStatus("error");
       setRecognitionError(cameraErrorMessage(error));
     }
-  }, [activeTargets, matcher]);
+  }, [matcher, recognitionTargets]);
 
   useEffect(() => {
     if (!configurationReady) return;
@@ -242,6 +247,7 @@ export default function Home() {
       clearStoredGame(window.localStorage, gameStorageKey);
       dispatch({ type: "RESET", keepPlaying: false });
       setCustomReferences((current) => ({ ...current, [targetId]: [image] }));
+      setCustomNames((current) => ({ ...current, [targetId]: normalizeTreasureName(current[targetId]) }));
     } catch (error) {
       setShareMessage(cameraErrorMessage(error));
     } finally {
@@ -258,11 +264,16 @@ export default function Home() {
       delete next[targetId];
       return next;
     });
+    setCustomNames((current) => {
+      const next = { ...current };
+      delete next[targetId];
+      return next;
+    });
   };
 
   const shareHunt = async () => {
     try {
-      const url = buildShareUrl(customReferences);
+      const url = buildShareUrl(customReferences, customNames);
       if (navigator.share) {
         await navigator.share({ title: "家庭实景寻宝", text: `我藏好了 ${activeTargets.length} 个宝藏，来找找看！`, url });
         setShareMessage("分享面板已打开");
@@ -329,7 +340,19 @@ export default function Home() {
                       ? <img src={image} alt={`宝藏 ${index + 1} 参考图`} />
                       : <b aria-label={image ? "已设置" : "本局未使用"}>{image ? "?" : "×"}</b>}
                   </div>
-                  <span>{image ? `宝藏 ${index + 1}` : `空槽 ${index + 1}`}</span>
+                  {image ? (
+                    sharedMode
+                      ? <span>{normalizeTreasureName(customNames[target.id])}</span>
+                      : <input
+                          className="treasure-name-input"
+                          type="text"
+                          maxLength={20}
+                          aria-label={`宝藏 ${index + 1} 名称`}
+                          value={customNames[target.id] ?? DEFAULT_TREASURE_NAME}
+                          onChange={(event) => setCustomNames((current) => ({ ...current, [target.id]: event.target.value }))}
+                          onBlur={() => setCustomNames((current) => ({ ...current, [target.id]: normalizeTreasureName(current[target.id]) }))}
+                        />
+                  ) : <span>{`空槽 ${index + 1}`}</span>}
                   {!sharedMode && (
                     <>
                       <label>

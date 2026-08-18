@@ -12,7 +12,7 @@ import {
   normalizeMatchResult,
 } from "../app/core/matcher.js";
 import { TARGETS, createConfiguredTargets } from "../app/core/targets.js";
-import { decodeSharedHunt, encodeSharedHunt } from "../app/core/share.js";
+import { decodeSharedHunt, decodeSharedHuntNames, encodeSharedHunt } from "../app/core/share.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
 
 const targetIds = TARGETS.map((target) => target.id);
@@ -29,8 +29,18 @@ test("开始前只启用已上传的宝藏且每槽只保留一张", () => {
   const configured = createConfiguredTargets({ [TARGETS[0].id]: customUrls });
   assert.equal(configured.length, 1);
   assert.equal(configured[0].customized, true);
-  assert.equal(configured[0].shortName, "宝藏 1");
+  assert.equal(configured[0].shortName, "神秘宝藏");
   assert.deepEqual(configured[0].referenceImages, customUrls.slice(0, 1));
+});
+
+test("创建者自定义名称会用于玩家端目标", () => {
+  const targetId = TARGETS[0].id;
+  const configured = createConfiguredTargets(
+    { [targetId]: ["blob:treasure"] },
+    { [targetId]: "  薯条冰箱贴  " },
+  );
+  assert.equal(configured[0].name, "薯条冰箱贴");
+  assert.equal(configured[0].shortName, "薯条冰箱贴");
 });
 
 test("分享数据可以在另一端还原启用的宝藏", () => {
@@ -38,7 +48,20 @@ test("分享数据可以在另一端还原启用的宝藏", () => {
     [TARGETS[0].id]: ["data:image/jpeg;base64,AAA"],
     [TARGETS[2].id]: ["data:image/jpeg;base64,CCC"],
   };
-  assert.deepEqual(decodeSharedHunt(encodeSharedHunt(references)), references);
+  const payload = encodeSharedHunt(references, { [TARGETS[0].id]: "薯条冰箱贴", [TARGETS[2].id]: "" });
+  assert.deepEqual(decodeSharedHunt(payload), references);
+  assert.deepEqual(decodeSharedHuntNames(payload), {
+    [TARGETS[0].id]: "薯条冰箱贴",
+    [TARGETS[2].id]: "神秘宝藏",
+  });
+});
+
+test("旧版分享链接未保存名称时兼容为神秘宝藏", () => {
+  const legacy = Buffer.from(JSON.stringify({
+    version: 1,
+    images: [{ id: TARGETS[0].id, image: "data:image/jpeg;base64,AAA" }],
+  })).toString("base64url");
+  assert.deepEqual(decodeSharedHuntNames(legacy), { [TARGETS[0].id]: "神秘宝藏" });
 });
 
 test("只设置一个宝藏也能完成游戏", () => {
