@@ -1,7 +1,8 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { withTimeout } from "./core/async.js";
 import { CameraController, cameraErrorMessage } from "./core/camera.js";
 import { captureFrame } from "./core/capture.js";
 import { TARGETS, createConfiguredTargets, getTarget } from "./core/targets.js";
@@ -19,6 +20,7 @@ import { FAILURE_ASSIST_THRESHOLD, failureHelp, feedbackForMatch, formatConfiden
 type Feedback = { tone: string; title: string; detail: string };
 type ZoomInfo = { min: number; max: number; step: number; value: number; presets: number[] };
 type TorchInfo = { supported: boolean; enabled: boolean };
+type RecognitionStatus = "loading" | "ready" | "error";
 type SimilarityScore = { targetId: string; similarity: number | null; excluded?: boolean; referenceCount?: number };
 type MatchResult = {
   matched: boolean;
@@ -52,10 +54,13 @@ export default function Home() {
   const [lastCapture, setLastCapture] = useState<string | null>(null);
   const [lastRecognition, setLastRecognition] = useState<string | null>(null);
   const [customReferences, setCustomReferences] = useState<CustomReferences>({});
+  const [recognitionStatus, setRecognitionStatus] = useState<RecognitionStatus>("loading");
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const focusFrameRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraController | null>(null);
   const customReferenceUrlsRef = useRef<CustomReferences>({});
+  const preparationIdRef = useRef(0);
   const activeTargets = useMemo(() => createConfiguredTargets(customReferences), [customReferences]);
   const matcher = useMemo(
     () => debugEnabled ? createMockMatcher() : createEmbeddingMatcher(),
@@ -82,7 +87,34 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
+  const prepareRecognition = useCallback(async () => {
+    const preparationId = ++preparationIdRef.current;
+    setRecognitionStatus("loading");
+    setRecognitionError(null);
+    try {
+      await withTimeout(
+        matcher.prepare?.(activeTargets),
+        120_000,
+        "识别模型加载超时，请切换到稳定网络后重试",
+      );
+      if (preparationId === preparationIdRef.current) setRecognitionStatus("ready");
+    } catch (error) {
+      if (preparationId !== preparationIdRef.current) return;
+      setRecognitionStatus("error");
+      setRecognitionError(cameraErrorMessage(error));
+    }
+  }, [activeTargets, matcher]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void prepareRecognition(), 0);
+    return () => {
+      window.clearTimeout(timer);
+      preparationIdRef.current += 1;
+    };
+  }, [prepareRecognition]);
+
   const startCamera = async () => {
+    if (recognitionStatus !== "ready") return;
     setStarting(true);
     setCameraError(null);
     try {
@@ -91,7 +123,6 @@ export default function Home() {
       setZoomInfo(info?.zoom ?? null);
       setTorchInfo(info?.torch ?? null);
       dispatch({ type: "START" });
-      void matcher.prepare?.(activeTargets).catch(() => undefined);
     } catch (error) {
       setCameraActive(false);
       setCameraError(cameraErrorMessage(error));
@@ -122,12 +153,20 @@ export default function Home() {
       const capture = await captureFrame(videoRef.current, { frameElement: focusFrameRef.current });
       setLastCapture(capture.fullDataUrl);
       setLastRecognition(capture.recognitionDataUrl);
-      const result = await matcher.match(capture, { targets: activeTargets, foundIds: game.foundIds });
+      const result = await withTimeout(
+        matcher.match(capture, { targets: activeTargets, foundIds: game.foundIds }),
+        20_000,
+        "单次识别超时，请重试",
+      );
       submitResult(result);
     } catch (error) {
       const result = { matched: false, targetId: null, confidence: 0, provider: "error", reason: cameraErrorMessage(error) };
       dispatch({ type: "MATCH_RESULT", result, targetIds: TARGET_IDS });
-      setFeedback({ tone: "miss", title: "这次没拍好", detail: "请稳住手机再试一次" });
+      setFeedback({
+        tone: "miss",
+        title: "这次识别没完成",
+        detail: error instanceof Error && error.message.includes("超时") ? error.message : "请稳住手机再试一次",
+      });
     } finally {
       setIsMatching(false);
     }
@@ -262,8 +301,33 @@ export default function Home() {
             })}
           </div>
           <p className="local-photo-note">每个宝藏可选 1～5 张 · 照片只在当前页面使用</p>
-          <button className="primary-button" type="button" onClick={startCamera} disabled={starting}>
-            <span>{starting ? "正在打开摄像头…" : game.foundIds.length > 0 ? `继续寻宝 ${game.foundIds.length}/4` : "开始寻宝"}</span><span aria-hidden="true">→</span>
+          <div className={`recognition-readiness ${recognitionStatus}`} role="status">
+            <i aria-hidden="true" />
+            <span>
+              {recognitionStatus === "loading"
+                ? "正在分析已选照片，首次约需下载 8MB"
+                : recognitionStatus === "ready"
+                  ? "宝藏特征已准备好"
+                  : recognitionError ?? "识别准备失败"}
+            </span>
+          </div>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={recognitionStatus === "error" ? prepareRecognition : startCamera}
+            disabled={starting || recognitionStatus === "loading"}
+          >
+            <span>
+              {recognitionStatus === "loading"
+                ? "正在分析宝藏照片…"
+                : recognitionStatus === "error"
+                  ? "重新分析照片"
+                  : starting
+                    ? "正在打开摄像头…"
+                    : game.foundIds.length > 0
+                      ? `继续寻宝 ${game.foundIds.length}/4`
+                      : "开始寻宝"}
+            </span><span aria-hidden="true">→</span>
           </button>
           <p className="permission-note">开始后需要使用后置摄像头</p>
           {game.foundIds.length > 0 && (

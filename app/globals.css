@@ -100,6 +100,13 @@ h1 {
 .treasure-pick label input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .treasure-pick button { margin-top: 4px; color: #6e7775; background: transparent; text-decoration: underline; text-underline-offset: 2px; }
 .local-photo-note { margin: 0 0 14px; color: #7a8787; font-size: 10px; }
+.recognition-readiness { width: min(100%, 310px); min-height: 31px; display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; color: #617078; background: rgba(255,255,255,.58); font-size: 10px; line-height: 1.35; }
+.recognition-readiness i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #96a29f; }
+.recognition-readiness.loading i { border: 2px solid #9ba9a6; border-top-color: var(--coral); background: transparent; animation: spin 900ms linear infinite; }
+.recognition-readiness.ready { color: #2f725e; background: #e3f2e6; }
+.recognition-readiness.ready i { background: #43a077; }
+.recognition-readiness.error { color: #a33e31; background: #ffe7df; }
+.recognition-readiness.error i { background: var(--coral); }
 
 .primary-button {
   width: min(100%, 310px);
@@ -271,6 +278,7 @@ h1 {
 .complete-treasure small { display: block; margin-top: 5px; font-size: 9px; }
 
 @keyframes pulse { to { transform: scale(.82); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (min-width: 600px) {
   .app-shell:not(.camera-shell) { padding: 20px; }

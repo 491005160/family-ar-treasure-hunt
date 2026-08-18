@@ -19,6 +19,9 @@ export function createMobileNetEmbedder({ modelUrl = DEFAULT_MODEL_PATH } = {}) 
           inputRange: [0, 1],
         });
       });
+      modelPromise.catch(() => {
+        modelPromise = null;
+      });
     }
     return modelPromise;
   };
@@ -37,7 +40,9 @@ export function createMobileNetEmbedder({ modelUrl = DEFAULT_MODEL_PATH } = {}) 
   const embedUrl = async (url) => {
     const resolvedUrl = new URL(url, document.baseURI).href;
     if (!referenceCache.has(resolvedUrl)) {
-      referenceCache.set(resolvedUrl, loadImage(resolvedUrl).then(embedDrawable));
+      const embeddingPromise = loadImage(resolvedUrl).then(embedDrawable);
+      referenceCache.set(resolvedUrl, embeddingPromise);
+      embeddingPromise.catch(() => referenceCache.delete(resolvedUrl));
     }
     return referenceCache.get(resolvedUrl);
   };

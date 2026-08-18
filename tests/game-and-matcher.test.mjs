@@ -3,6 +3,7 @@ import test from "node:test";
 import { createInitialGameState, gameReducer, getCurrentTargetId } from "../app/core/game.js";
 import { buildZoomPresets, readTorchInfo, readZoomInfo } from "../app/core/camera.js";
 import { calculateCoverCrop } from "../app/core/capture.js";
+import { withTimeout } from "../app/core/async.js";
 import { cosineSimilarity } from "../app/core/embedding.js";
 import {
   createEmbeddingMatcher,
@@ -14,6 +15,13 @@ import { TARGETS, createConfiguredTargets } from "../app/core/targets.js";
 import { failureHelp, formatConfidence } from "../app/core/ui.js";
 
 const targetIds = TARGETS.map((target) => target.id);
+
+test("超时保护会释放永久等待的识别任务", async () => {
+  await assert.rejects(
+    withTimeout(new Promise(() => {}), 5, "单次识别超时，请重试"),
+    /单次识别超时/,
+  );
+});
 
 test("开始前上传的参考图只替换对应宝藏并限制为五张", () => {
   const customUrls = Array.from({ length: 7 }, (_, index) => `blob:treasure-${index}`);
